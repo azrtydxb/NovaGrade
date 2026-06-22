@@ -1,0 +1,230 @@
+{
+  "1a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "False"
+  },
+  "1b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "1c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "1d": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "False"
+  },
+  "1e": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "2a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Principal"
+  },
+  "2b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Rate"
+  },
+  "2c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Time"
+  },
+  "3a": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Circumference"
+  },
+  "b": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Diameter"
+  },
+  "4": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "2 h. 50 min."
+  },
+  "5a": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "2 = hundreds thousands\n7 = thousands"
+  },
+  "5b": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "7 = Ten millions\n2 = Thousands"
+  },
+  "6a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "<"
+  },
+  "6b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": ">"
+  },
+  "6c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": ">"
+  },
+  "7": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Biggest: 95420\nSmallest: 20459"
+  },
+  "11": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "D: 64"
+  },
+  "12a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": ">"
+  },
+  "12b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "<"
+  },
+  "12c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "="
+  },
+  "13": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "C: 22"
+  },
+  "14a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "C: 654,500"
+  },
+  "17": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B: 38 m"
+  },
+  "18": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "C: 120 km"
+  },
+  "19": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B: 3:54 p.m"
+  },
+  "20": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "1/32"
+  },
+  "30": {
+    "max_marks": 3.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "A: 20 kg and 20 kg"
+  },
+  "31a": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "10"
+  },
+  "31b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "decagon"
+  },
+  "31c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "36°"
+  },
+  "34a": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "a). buying food - buying clothes - paying school fees - painting house"
+  },
+  "34b(i)": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "The required amount to meet the budget is 120,000 Frw + 100,000 Frw + 200,000 Frw + 150,000 Frw = 570,000 Frw"
+  },
+  "34b(ii)": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "They don't have enough money. He missing amount is 570,000 Frw - 500,000 Frw = 70,000 Frw"
+  },
+  "34b(iii)": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Painting a house"
+  },
+  "35a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "95, 2, 190; 90, 3, 270; 85, 3, 680; 80, 8, 80; 75, 1, 450; 70, 6, 210; 60, 2, 120; Σf = 25; Σfx = 2000"
+  },
+  "35b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "85"
+  },
+  "35c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "2000/25 = 80"
+  }
+}

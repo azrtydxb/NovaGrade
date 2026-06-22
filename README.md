@@ -152,6 +152,20 @@ Because the guide carries the canonical `max_marks`, it also pulls the denominat
 paper's true total. Full detail + diagrams:
 [`docs/ARCHITECTURE.md` §7](docs/ARCHITECTURE.md#7-grading-strategy-the-markscheme-interface).
 
+### Scaffold a full guide
+
+Authoring a complete guide is just filling in answers. Generate a template from a transcript —
+every question pre-listed with its marks, a default `match`, a blank `answer`/`rubric`, and the
+student's transcribed answer as a `_student_answer` hint:
+
+    uv run python scaffold_guide.py "out/Math paper.transcript.json"
+    # -> in/Math paper.guide.template.json
+
+Pre-scaffolded templates for the sample papers are in `in/*.guide.template.json`. Fill in the
+authoritative answers (and set `match`/`accept`/`rubric` per question), rename to
+`in/<subject>.guide.json`, and grade with `--guide`. Questions ≥ 5 marks default to the
+`rubric` match type; the `_student_answer` field is an authoring hint and is ignored by the grader.
+
 ### Reproducible grades
 
 LLM-judged grading varies slightly between runs (vLLM at `temperature=0` is not

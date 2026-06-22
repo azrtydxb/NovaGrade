@@ -1,0 +1,404 @@
+{
+  "1a": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "The main idea is that the boy is excited about his new school."
+  },
+  "1b": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "He meets his teacher and makes new friends."
+  },
+  "1c": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Because he gets to learn new things and make new friends."
+  },
+  "1d": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "His favorite subject is math."
+  },
+  "1e": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "He goes home and does his homework."
+  },
+  "2a": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "sad"
+  },
+  "2b": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "large"
+  },
+  "2c": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "children"
+  },
+  "2d": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "went"
+  },
+  "2e": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "ate"
+  },
+  "3a": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "The garden is beautiful."
+  },
+  "3b": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "The cat ran quickly."
+  },
+  "3c": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "We played together."
+  },
+  "3d": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "It is important to be kind."
+  },
+  "3e": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "We are all different."
+  },
+  "4": {
+    "max_marks": 15.0,
+    "match": "rubric",
+    "rubric": "",
+    "_student_answer": "My favorite holiday is Christmas. I spend it with my family. We decorate the tree and eat a big meal. I like it because I get presents and I can see my cousins. We sing carols and watch movies. It is a happy time."
+  },
+  "1f": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": ""
+  },
+  "1g": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": ""
+  },
+  "1h": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": ""
+  },
+  "1i": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": ""
+  },
+  "1j": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": ""
+  },
+  "1ii": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "C"
+  },
+  "1iii": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "C"
+  },
+  "1iv": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B"
+  },
+  "1v": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B"
+  },
+  "1vi": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B"
+  },
+  "vii": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "C"
+  },
+  "viii": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B"
+  },
+  "ix": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "C"
+  },
+  "x": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "D"
+  },
+  "xi": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "D"
+  },
+  "xii": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "A"
+  },
+  "xiii": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B"
+  },
+  "xiv": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B) You may not grow the way you are supposed to."
+  },
+  "xv": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "A) Boosting immunity"
+  },
+  "xvi": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "A) Carbohydrates"
+  },
+  "3": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "bus, car, bicycle, run, boat"
+  },
+  "4a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "farmer"
+  },
+  "4b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "teacher"
+  },
+  "4c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "reader"
+  },
+  "4d": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "cook"
+  },
+  "4e": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "trader"
+  },
+  "5i": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B"
+  },
+  "5ii": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B"
+  },
+  "7a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "yours"
+  },
+  "7b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "She"
+  },
+  "7c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "our, yours"
+  },
+  "7d": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "they"
+  },
+  "8": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "woke, ate, went, played, did, watched, called, will help, will clean, will study"
+  },
+  "9a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "better"
+  },
+  "9b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "in order to"
+  },
+  "9c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Tom is too intelligent to fail the test"
+  },
+  "9d": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "I prefer watching movies to reading stories"
+  },
+  "9e": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Kigali is a nice city, isn't it?"
+  },
+  "10a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "must"
+  },
+  "10b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "mustn't"
+  },
+  "10c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "mustn't"
+  },
+  "10d": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "must"
+  },
+  "10e": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "mustn't"
+  },
+  "11": {
+    "max_marks": 5.0,
+    "match": "rubric",
+    "rubric": "",
+    "_student_answer": "small, Africa, beautiful, hard, rich"
+  },
+  "12": {
+    "max_marks": 5.0,
+    "match": "rubric",
+    "rubric": "",
+    "_student_answer": "wild, animals, lion, elephant, trees"
+  },
+  "13a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "mother"
+  },
+  "13b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "sister"
+  },
+  "13c": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "cousin"
+  },
+  "13d": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "father"
+  },
+  "13e": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "aunt"
+  },
+  "14": {
+    "max_marks": 15.0,
+    "match": "rubric",
+    "rubric": "",
+    "_student_answer": "A good friend is a person with whom you share everything. He does not betray you when you share secrets. The good friend is always there to assist when in need. He thinks about you when there is an opportunity of promotion or a chance for development. A good friend will always be by your side in difficulties and in good times. He suffers with you and rejoices with you."
+  }
+}

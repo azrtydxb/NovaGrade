@@ -1,0 +1,398 @@
+{
+  "1a": {
+    "max_marks": 0.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "PSET"
+  },
+  "1b": {
+    "max_marks": 0.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "03/07/2025"
+  },
+  "1c": {
+    "max_marks": 0.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "09:00 AM - 11:00 AM"
+  },
+  "1d": {
+    "max_marks": 0.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Two hours"
+  },
+  "1e": {
+    "max_marks": 0.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "/100"
+  },
+  "1f": {
+    "max_marks": 0.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "National Examination and School Inspection Authority"
+  },
+  "1": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "A"
+  },
+  "2": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "C, E"
+  },
+  "3a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "used to measure length of the wood"
+  },
+  "3b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "used for cutting wood"
+  },
+  "4a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "4b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "5": {
+    "max_marks": 3.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Cutting tools: wood saw, Drilling tools: brace, Smoothing tools: plane"
+  },
+  "6": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "D) flower"
+  },
+  "7": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "To attract pollinators"
+  },
+  "8": {
+    "max_marks": 3.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": ""
+  },
+  "9": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Transpiration"
+  },
+  "10": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B) Skills which help you to type data."
+  },
+  "11a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "11b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "12a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Underline text"
+  },
+  "12b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Colouring the text"
+  },
+  "13i": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Computer"
+  },
+  "13ii": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Internet"
+  },
+  "14": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "b a c d"
+  },
+  "15": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "To create dialogue and cartoons"
+  },
+  "16": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "D) Pliers"
+  },
+  "17": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Store tools properly. Handle tools with much care."
+  },
+  "18": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "a) Wires - i) Socks\nb) Manila paper - ii) a toy bicycle\nc) Thread - iii) a ball\nd) Banana fibre - iv) Polygons"
+  },
+  "19": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "teaching activities"
+  },
+  "20": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "C) Energy which enables us to hear."
+  },
+  "21a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "21b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "22": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Evaporation\nCondensation"
+  },
+  "23": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Cities"
+  },
+  "24": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "because burning charcoals produces carbon monoxide which is poisonous"
+  },
+  "25": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Terracing; planting trees"
+  },
+  "26": {
+    "max_marks": 3.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "a) Clay soil -> i) Good for crops\nb) Sand soil -> ii) Modeling pots\nc) Loam soil -> iii) Making bricks"
+  },
+  "27": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "a) True\nb) True"
+  },
+  "28": {
+    "max_marks": 3.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "a) Used engine oil -> i) Agricultural waste\nb) Raw sewage -> ii) Waste from automobiles\nc) Plant remains -> iii) Industrial waste"
+  },
+  "29": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "i) Poor hygiene.\niv) Vaccinating chickens."
+  },
+  "30": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B) Dog"
+  },
+  "31": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B) Classification."
+  },
+  "32a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "32b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "False"
+  },
+  "33": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "A) Lack of enough pasture\nC) Parasites and diseases"
+  },
+  "34a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "False"
+  },
+  "34b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "False"
+  },
+  "35": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "C) Involuntary"
+  },
+  "36": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "B) Ingestion."
+  },
+  "37": {
+    "max_marks": 3.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "a) Marasmus - i) Lack of iodine in diet.\nb) Rickets - iii) Lack of vitamin D calcium.\nc) Goitre - ii) Lack of enough food."
+  },
+  "38a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Diaphragm"
+  },
+  "38b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Lungs"
+  },
+  "39": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Carbohydrates: Maize\nProteins: Beans\nVitamins: Orange"
+  },
+  "40": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Abstinence\nChoose good friends"
+  },
+  "41": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "A. Pulmonary Veins\nB. Aorta\nC. Vena Cava\nD. Pulmonary Artery"
+  },
+  "42": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Doing regular physical exercise\nDrinking enough water\nAvoid smoking\nGet vaccinated"
+  },
+  "43": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Abstinence\nAvoid alcohol"
+  },
+  "44": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Zygote - embryo - Foetus - baby"
+  },
+  "45": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "Glass - Non-metal\nNail - Metal\nCoin - Metal\nWooden spoon - Non-metal"
+  },
+  "46a": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "True"
+  },
+  "46b": {
+    "max_marks": 1.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "False"
+  },
+  "47": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "electrical"
+  },
+  "48": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "100°C, 0°C"
+  },
+  "49": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "a) Dry cell - i) break and complete the circuit\nb) Bulb - iv) converts electrical energy into light energy\nc) Wire - ii) transmit electric current\nd) Switch - iii) produce energy."
+  },
+  "50": {
+    "max_marks": 2.0,
+    "match": "exact_ci",
+    "answer": "",
+    "_student_answer": "N S"
+  }
+}
