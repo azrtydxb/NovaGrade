@@ -83,7 +83,9 @@ healthy before a live run.
 1. `examgrader/pdf_to_images.py` — `pdftoppm` renders pages; near-blank scans are dropped.
 2. `examgrader/transcriber.py` — sends each page to the vision model, which returns
    structured `{question, max_marks, student_answer, read_confidence}` records. A single
-   unreadable page or question is skipped, never the whole paper.
+   unreadable page or question is skipped, never the whole paper. `examgrader/markmap.py`
+   reads the paper's stated total from the instructions page and the transcriber re-runs (up
+   to `max_transcribe_passes`) to best match it — a mismatch is flagged, not hidden.
 3. `examgrader/grader.py` — the `MarkScheme` interface grades each question: `LLMJudge` by
    default, or `GuideMarkScheme` with `--guide` (deterministic, marking-guide-driven). The
    reading stage is untouched either way.
@@ -95,17 +97,23 @@ Every paper is scored on a normalized **0–100 scale** (`score_100 = 100 × awa
 max_marks`), so grades are comparable across papers and can never exceed 100. The committed
 grades under `out/` are from this run:
 
-| Paper | Grade /100 | Raw | Questions | Blank |
-|-------|-----------|-----|-----------|-------|
-| Math    | 77.6 | 45/58  | 38 | 0 |
-| English | 55.9 | 81/145 | 69 | 0 |
-| SET     | 72.0 | 72/100 | 60 | 0 |
+Every paper is scored on a normalized **0–100 scale** and is **reconciled** against the
+paper's own stated total (read from the instructions page): if the detected marks don't match,
+the report flags it. The committed grades under `out/` are from this run:
 
-The "raw" denominator is the sum of the transcribed `max_marks`. It still drifts from the
-paper's true 100 (English 145) because the vision model reads per-question marks imperfectly —
-the normalized `/100` grade absorbs that, but the **only true fix is feeding the official
-marking guide** (see [Marking guide](#marking-guide-deterministic-accurate-grading)). Treat
-these as a pipeline demonstration; LLM-judge scores also vary run-to-run.
+| Paper | Grade /100 | Raw | Stated total | Marks checksum |
+|-------|-----------|-----|--------------|----------------|
+| SET     | 70.0 | 70/100  | 100 | ✓ reconciles (100 = 100) |
+| Math    | 76.8 | 43/56   | 100 | ⚠ under-read (56) |
+| English | 66.8 | 125/187 | 100 | ⚠ over-read (187) |
+
+The checksum is the key trust signal. **SET reconciles exactly**, so its denominator is the
+real 100. Math and English don't — the vision model mis-reads their per-question marks (Math
+under, English over), so the pipeline re-transcribes (up to `max_transcribe_passes`) and, if it
+still can't match, **flags the paper** rather than pretending. The normalized `/100` keeps the
+score in range, but a flagged denominator is unreliable — the cure is a **marking guide**
+(`--guide`), which supplies the canonical marks. Treat un-reconciled scores as a demonstration;
+LLM-judge grades also vary run-to-run.
 
 ## Performance
 

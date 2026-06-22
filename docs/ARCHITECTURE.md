@@ -116,6 +116,15 @@ sequenceDiagram
 The transcript is persisted **before** grading, so grading can be re-run without paying for
 OCR again.
 
+**Marks reconciliation.** Before transcription, `markmap.extract_mark_map` reads the paper's
+stated total off the instructions page. `transcribe_reconciled` then transcribes up to
+`max_transcribe_passes` times, keeping the pass whose detected `max_marks` total is closest to
+that stated total (and stopping on an exact match). The stated total is recorded on the
+transcript and graded paper; the report shows a ✓/⚠ checksum line. The denominator stays the
+*detected* total (the scale the awards are on), so reconciliation improves accuracy by making
+detection converge — it never overrides the denominator (which would let scores exceed 100).
+A persistent mismatch is flagged for review; the marking guide (§7) is the deterministic cure.
+
 ## 4. Data model (stage interfaces)
 
 ```mermaid
