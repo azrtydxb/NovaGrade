@@ -26,9 +26,21 @@ def test_to_json_roundtrips():
 def test_to_markdown_has_header_and_flag():
     md = report.to_markdown(_paper())
     assert "Math" in md
-    assert "5" in md and "100" in md
+    assert "Grade: 5 / 100" in md   # 5 awarded out of max_total 100 -> 5/100
+    assert "raw 5/100" in md        # raw marks shown alongside
     assert "1a" in md and "2a" in md
     assert "⚠" in md  # flagged question marked
+
+
+def test_to_markdown_normalizes_to_100():
+    # 86 out of a derived max of 145 should headline as ~59/100
+    paper = GradedPaper(
+        subject="English", source_pdf="e.pdf", questions=[],
+        section_totals={}, total=86.0, max_total=145.0,
+    )
+    md = report.to_markdown(paper)
+    assert "Grade: 59.3 / 100" in md
+    assert "raw 86/145" in md
 
 
 def test_blank_answer_flag_not_marked_review():

@@ -2,7 +2,7 @@ import os
 import pytest
 from examgrader import pdf_to_images
 
-MATH = "Math paper.pdf"
+MATH = "in/Math paper.pdf"
 pytestmark = pytest.mark.skipif(not os.path.exists(MATH), reason="sample PDF absent")
 
 

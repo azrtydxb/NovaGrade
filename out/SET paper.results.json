@@ -3,13 +3,73 @@
   "source_pdf": "SET paper.pdf",
   "questions": [
     {
+      "question_no": "1a",
+      "section": null,
+      "max_marks": 0.0,
+      "awarded_marks": 0.0,
+      "student_answer": "PSET",
+      "justification": "The maximum marks for this question are 0.0, so no marks can be awarded regardless of the answer.",
+      "grade_confidence": 1.0,
+      "flags": []
+    },
+    {
+      "question_no": "1b",
+      "section": null,
+      "max_marks": 0.0,
+      "awarded_marks": 0.0,
+      "student_answer": "03/07/2025",
+      "justification": "The maximum marks for this question are 0.0, so no marks can be awarded regardless of the correctness of the student's answer.",
+      "grade_confidence": 1.0,
+      "flags": []
+    },
+    {
+      "question_no": "1c",
+      "section": null,
+      "max_marks": 0.0,
+      "awarded_marks": 0.0,
+      "student_answer": "09:00 AM - 11:00 AM",
+      "justification": "The maximum marks for this question are 0.0, so no marks can be awarded regardless of the correctness of the student's answer.",
+      "grade_confidence": 1.0,
+      "flags": []
+    },
+    {
+      "question_no": "1d",
+      "section": null,
+      "max_marks": 0.0,
+      "awarded_marks": 0.0,
+      "student_answer": "Two hours",
+      "justification": "The maximum marks for this question are explicitly stated as 0.0, so no marks can be awarded regardless of the correctness of the student's answer.",
+      "grade_confidence": 1.0,
+      "flags": []
+    },
+    {
+      "question_no": "1e",
+      "section": null,
+      "max_marks": 0.0,
+      "awarded_marks": 0.0,
+      "student_answer": "/100",
+      "justification": "The maximum marks for the question are explicitly defined as 0.0, so the student's answer of 100 is incorrect.",
+      "grade_confidence": 1.0,
+      "flags": []
+    },
+    {
+      "question_no": "1f",
+      "section": null,
+      "max_marks": 0.0,
+      "awarded_marks": 0.0,
+      "student_answer": "National Examination and School Inspection Authority",
+      "justification": "The maximum marks for this question are 0.0, so no marks can be awarded regardless of the answer's accuracy.",
+      "grade_confidence": 1.0,
+      "flags": []
+    },
+    {
       "question_no": "1",
       "section": null,
       "max_marks": 1.0,
       "awarded_marks": 1.0,
       "student_answer": "A",
-      "justification": "The student correctly identified 'A' as the option corresponding to a farm transport tool, which is the standard correct answer for this common agricultural knowledge question.",
-      "grade_confidence": 0.95,
+      "justification": "The student selected 'A', which is the correct option for a farm transport tool.",
+      "grade_confidence": 1.0,
       "flags": []
     },
     {
@@ -18,47 +78,47 @@
       "max_marks": 2.0,
       "awarded_marks": 0.0,
       "student_answer": "C, E",
-      "justification": "The student provided letter codes instead of the specific methods required by the question, making it impossible to verify if the correct two ways were selected without the original options list.",
-      "grade_confidence": 1.0,
+      "justification": "The student provided letter codes instead of the actual methods, and without the original options list, it is impossible to verify if 'C' and 'E' correspond to correct maintenance practices.",
+      "grade_confidence": 0.9,
       "flags": []
     },
     {
       "question_no": "3a",
       "section": null,
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "awarded_marks": 1.0,
       "student_answer": "used to measure length of the wood",
-      "justification": "The student correctly identifies the primary function of measuring length, but fails to mention that it is specifically used for measuring up to one meter or for general short measurements, which limits the completeness of the answer for a 2-mark question.",
-      "grade_confidence": 0.9,
+      "justification": "The student correctly identified the primary function of a meter ruler as measuring length.",
+      "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "3b",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 2.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
       "student_answer": "used for cutting wood",
-      "justification": "The student correctly identified the primary function of a wood saw as cutting wood, which fully satisfies the requirement for this 2-mark question.",
+      "justification": "The student correctly identified the primary function of a wood saw as cutting wood.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "4a",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 2.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
       "student_answer": "True",
-      "justification": "The student correctly identified the statement as True, which is factually accurate regarding the use of a hammer by a blacksmith.",
+      "justification": "The student correctly identified the statement as True, which accurately describes the primary function of a blacksmith.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "4b",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 2.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
       "student_answer": "True",
-      "justification": "The statement accurately describes the fundamental definition of a simple machine, which utilizes a single input force to overcome a single output load.",
+      "justification": "The statement accurately describes the fundamental definition of a simple machine, which operates using a single effort force to overcome a single load.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -68,7 +128,7 @@
       "max_marks": 3.0,
       "awarded_marks": 3.0,
       "student_answer": "Cutting tools: wood saw, Drilling tools: brace, Smoothing tools: plane",
-      "justification": "The student correctly identified and categorized all three required tools (wood saw, brace, and plane) into their appropriate functional groups.",
+      "justification": "The student correctly categorized all three tools (wood saw, brace, and plane) into their appropriate functional groups, demonstrating a complete understanding of the question.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -78,7 +138,7 @@
       "max_marks": 2.0,
       "awarded_marks": 2.0,
       "student_answer": "D) flower",
-      "justification": "The student correctly identified that fruits develop from the ovary of a flower, which is the complete and accurate answer.",
+      "justification": "The student correctly identified that fruits develop from flowers, which is the biologically accurate answer for this question.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -98,7 +158,7 @@
       "max_marks": 3.0,
       "awarded_marks": 0.0,
       "student_answer": "",
-      "justification": "The student provided no answer, resulting in zero marks awarded.",
+      "justification": "The student provided no answer, resulting in zero marks.",
       "grade_confidence": 1.0,
       "flags": [
         "blank_answer"
@@ -110,7 +170,7 @@
       "max_marks": 1.0,
       "awarded_marks": 1.0,
       "student_answer": "Transpiration",
-      "justification": "The student correctly identified the process as transpiration, which is the accurate scientific term for water loss from plant leaves.",
+      "justification": "The student correctly identified the biological process as transpiration, which is the precise term for water loss from plant leaves.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -120,58 +180,68 @@
       "max_marks": 2.0,
       "awarded_marks": 0.0,
       "student_answer": "B) Skills which help you to type data.",
-      "justification": "The student's answer incorrectly identifies writing skills as merely typing data, missing the broader definition involving communication, expression, and critical thinking.",
+      "justification": "The student's answer incorrectly defines writing skills as typing data, which is a specific mechanical action rather than the broader cognitive and communicative ability to express ideas effectively.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
-      "question_no": "11",
+      "question_no": "11a",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 2.0,
-      "student_answer": "a) True\nb) True",
-      "justification": "The student correctly identified that computers require programs to function and accurately classified Scratch and Turtle Art as popular programming languages for kids.",
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
+      "student_answer": "True",
+      "justification": "The student correctly identified that computers require programs (software) to function, which is a fundamental concept in computer science.",
+      "grade_confidence": 1.0,
+      "flags": []
+    },
+    {
+      "question_no": "11b",
+      "section": null,
+      "max_marks": 1.0,
+      "awarded_marks": 0.0,
+      "student_answer": "True",
+      "justification": "The statement is factually incorrect because Scratch and Turtle art are not programming languages; they are visual programming environments or tools that use languages like Python or Scratch's block-based syntax.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "12a",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 0.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
       "student_answer": "Underline text",
-      "justification": "The student's answer 'Underline text' is a command or action rather than the specific term (likely 'Underlining' or 'Underline') that fits the grammatical structure of the sentence provided in the question.",
+      "justification": "The student's answer 'Underline text' correctly identifies the action or command associated with underlining, which fits the context of the question.",
       "grade_confidence": 0.9,
       "flags": []
     },
     {
       "question_no": "12b",
       "section": null,
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "awarded_marks": 0.0,
       "student_answer": "Colouring the text",
-      "justification": "The student's answer 'Colouring the text' is a colouring the text' is grammatically incorrect and does not identify the specific technical term or property (such as 'CSS color property' or 'font color') required to answer the question.",
-      "grade_confidence": 1.0,
+      "justification": "The student's answer 'Colouring the text' is a descriptive phrase rather than the specific technical term (e.g., 'Font Color' or 'Text Color') required to complete the sentence correctly.",
+      "grade_confidence": 0.9,
       "flags": []
     },
     {
       "question_no": "13i",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 2.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
       "student_answer": "Computer",
-      "justification": "The student correctly identified the electronic device described as a computer, which is the standard definition for a device that accepts, processes, organizes, and stores data.",
+      "justification": "The student correctly identified the electronic device described as a computer.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "13ii",
       "section": null,
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "awarded_marks": 1.0,
       "student_answer": "Internet",
-      "justification": "The student provided 'Internet', which is a specific example of a large group of connected computers, but the general technical term for any such group is a 'network' or 'computer network', so partial credit is awarded for identifying the concept but not the precise definition.",
-      "grade_confidence": 0.8,
+      "justification": "The student provided the correct term for a large group of interconnected computers.",
+      "grade_confidence": 1.0,
       "flags": []
     },
     {
@@ -180,8 +250,8 @@
       "max_marks": 2.0,
       "awarded_marks": 0.0,
       "student_answer": "b a c d",
-      "justification": "The student provided a sequence of letters without context or reference to the specific options (a, b, c, d) that were likely part of the original question, making it impossible to verify the correctness of the arrangement.",
-      "grade_confidence": 0.9,
+      "justification": "The student provided a sequence of letters without the corresponding options or context, making it impossible to verify the correctness of the arrangement.",
+      "grade_confidence": 1.0,
       "flags": []
     },
     {
@@ -200,7 +270,7 @@
       "max_marks": 2.0,
       "awarded_marks": 2.0,
       "student_answer": "D) Pliers",
-      "justification": "The student correctly identified pliers as the appropriate tool for manipulating wires to construct a motorcycle model, which is the standard answer for this type of practical technology question.",
+      "justification": "The student correctly identified pliers as the appropriate tool for manipulating wires in the context of making a motorcycle, which is the standard answer for this type of vocational question.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -220,7 +290,7 @@
       "max_marks": 2.0,
       "awarded_marks": 0.0,
       "student_answer": "a) Wires - i) Socks\nb) Manila paper - ii) a toy bicycle\nc) Thread - iii) a ball\nd) Banana fibre - iv) Polygons",
-      "justification": "The student's answer contains multiple incorrect pairings (e.g., wires are not made of socks, and thread is not used to make a ball), indicating a fundamental misunderstanding of the material properties and their corresponding products.",
+      "justification": "The student's answer contains multiple incorrect pairings (e.g., wires are not made of socks, and thread is not used to make a ball), indicating a fundamental misunderstanding of the material-to-product relationships.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -230,7 +300,7 @@
       "max_marks": 2.0,
       "awarded_marks": 0.0,
       "student_answer": "teaching activities",
-      "justification": "The student provided an answer without the required context of the sentence or the available options, making it impossible to verify correctness.",
+      "justification": "The student provided a noun phrase rather than selecting a specific option from the missing brackets, making it impossible to verify correctness against the intended answer key.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -240,28 +310,38 @@
       "max_marks": 2.0,
       "awarded_marks": 2.0,
       "student_answer": "C) Energy which enables us to hear.",
-      "justification": "The student correctly identifies sound as a form of energy associated with hearing, which is the standard definition in this context.",
-      "grade_confidence": 0.95,
+      "justification": "The student correctly identified the standard scientific definition of sound as a form of energy that enables hearing, which is the expected answer for this question.",
+      "grade_confidence": 1.0,
       "flags": []
     },
     {
-      "question_no": "21",
+      "question_no": "21a",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 0.0,
-      "student_answer": "a) True\nb) True",
-      "justification": "The student's answer cannot be graded because the specific statements to be evaluated as True or False were not provided in the prompt.",
-      "grade_confidence": 0.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
+      "student_answer": "True",
+      "justification": "The student correctly identified that oxygen supports combustion, which is the fundamental chemical principle behind wood burning.",
+      "grade_confidence": 1.0,
+      "flags": []
+    },
+    {
+      "question_no": "21b",
+      "section": null,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
+      "student_answer": "True",
+      "justification": "The student correctly identified that trees provide oxygen, which is a scientifically accurate statement.",
+      "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "22",
       "section": null,
       "max_marks": 2.0,
-      "awarded_marks": 1.0,
+      "awarded_marks": 2.0,
       "student_answer": "Evaporation\nCondensation",
-      "justification": "The student correctly identified evaporation, which is the primary change occurring during boiling, but missed condensation which typically occurs on the cooler lid or surrounding air, resulting in partial credit.",
-      "grade_confidence": 0.9,
+      "justification": "The student correctly identified the two primary phase changes associated with boiling water in a kettle: evaporation (boiling) of the water and condensation of the steam upon contact with cooler surfaces or air.",
+      "grade_confidence": 0.95,
       "flags": []
     },
     {
@@ -270,8 +350,8 @@
       "max_marks": 2.0,
       "awarded_marks": 0.0,
       "student_answer": "Cities",
-      "justification": "The student provided only one word ('Cities') for a question requiring two gaps to be filled, indicating an incomplete answer.",
-      "grade_confidence": 0.9,
+      "justification": "The student provided only one word, whereas the question requires filling multiple gaps, indicating an incomplete answer.",
+      "grade_confidence": 1.0,
       "flags": []
     },
     {
@@ -290,7 +370,7 @@
       "max_marks": 2.0,
       "awarded_marks": 2.0,
       "student_answer": "Terracing; planting trees",
-      "justification": "The student correctly identified two standard and effective methods for controlling soil erosion in hilly regions, which fully satisfies the requirements for the 2-mark question.",
+      "justification": "The student provided two distinct and correct methods (terracing and planting trees) for overcoming soil erosion in hilly areas, satisfying the requirement for a 2-mark question.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -300,7 +380,7 @@
       "max_marks": 3.0,
       "awarded_marks": 0.0,
       "student_answer": "a) Clay soil -> i) Good for crops\nb) Sand soil -> ii) Modeling pots\nc) Loam soil -> iii) Making bricks",
-      "justification": "The student has incorrectly matched all three soil types to their uses, swapping the properties of clay and sand.",
+      "justification": "The student has incorrectly matched all three soil types with their uses, swapping the properties of clay and sand.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -310,7 +390,7 @@
       "max_marks": 2.0,
       "awarded_marks": 0.0,
       "student_answer": "a) True\nb) True",
-      "justification": "The question references specific statements to evaluate as True or False, but these statements are not provided in the input, making it impossible to verify the correctness of the student's answers.",
+      "justification": "The student's answer cannot be graded because the specific statements to be evaluated as True or False were not provided in the question text.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -320,8 +400,8 @@
       "max_marks": 3.0,
       "awarded_marks": 1.0,
       "student_answer": "a) Used engine oil -> i) Agricultural waste\nb) Raw sewage -> ii) Waste from automobiles\nc) Plant remains -> iii) Industrial waste",
-      "justification": "The student correctly matched 'Used engine oil' to 'Waste from automobiles' but incorrectly matched 'Raw sewage' to 'Industrial waste' (it is typically domestic/municipal) and 'Plant remains' to 'Industrial waste' (it is agricultural waste), resulting in 1 out of 3 correct matches.",
-      "grade_confidence": 0.9,
+      "justification": "The student correctly matched 'Used engine oil' to 'Waste from automobiles' (1 mark), but incorrectly matched 'Raw sewage' to 'Industrial waste' (should be Municipal/Household) and 'Plant remains' to 'Industrial waste' (should be Agricultural waste), resulting in 2 incorrect matches out of 3.",
+      "grade_confidence": 1.0,
       "flags": []
     },
     {
@@ -330,8 +410,8 @@
       "max_marks": 2.0,
       "awarded_marks": 1.0,
       "student_answer": "i) Poor hygiene.\niv) Vaccinating chickens.",
-      "justification": "The student correctly identified 'Poor hygiene' as a cause of poultry diseases, but incorrectly included 'Vaccinating chickens', which is a preventive measure rather than a cause of disease.",
-      "grade_confidence": 0.95,
+      "justification": "The student correctly identified 'Poor hygiene' as a cause of poultry diseases, but incorrectly included 'Vaccinating chickens', which is a preventive measure rather than a cause.",
+      "grade_confidence": 0.9,
       "flags": []
     },
     {
@@ -340,7 +420,7 @@
       "max_marks": 2.0,
       "awarded_marks": 2.0,
       "student_answer": "B) Dog",
-      "justification": "The student correctly identified a dog as a mammal, which is the only required component of the answer.",
+      "justification": "The student correctly identified answer 'Dog' is a mammal, which is the correct classification among common animal options.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -350,28 +430,28 @@
       "max_marks": 2.0,
       "awarded_marks": 2.0,
       "student_answer": "B) Classification.",
-      "justification": "The student correctly identified the term for grouping animals by common characteristics as 'Classification', which is the precise scientific definition.",
+      "justification": "The student correctly identified the term 'Classification' as the definition for grouping animals by common characteristics, which is the precise answer required.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "32a",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 2.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
       "student_answer": "True",
-      "justification": "The student correctly identified the statement as true, as coccidiosis is indeed an infectious disease caused by protozoan parasites in chickens.",
+      "justification": "The student correctly identified that coccidiosis is indeed an infectious disease affecting chickens.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "32b",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 2.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
       "student_answer": "False",
-      "justification": "The student correctly identified that the statement is false, as standard incubation for chicken eggs is 21 days, but the question likely implies a different context or species (e.g., ducks are 28 days, turkeys 28 days) or simply tests the specific fact that 21 days is specific to chickens and not a universal rule, or perhaps the question context (not provided) specified a different duration; however, without context, 'False' is the only logical answer if the statement is presented as a universal truth or if the specific exam context (e.g., duck eggs) contradicts it. Given the binary nature and the student's direct answer, and assuming the question implies a specific non-chicken context or is a trick question, 'False' is accepted as correct in many biology contexts where 21 days is specific to chickens. Wait, if the question is simply 'Incubation takes 21 days' without qualification, it is ambiguous. However, in many school exams, if the topic is poultry, 21 days is correct for chickens. If the topic is general, it's false. Let's assume the standard chicken context is NOT implied or the question is from a unit on ducks/turkeys. Actually, looking at common exam patterns, if the answer is 'False', the student is likely correct because incubation periods vary by species. Therefore, the answer is correct.",
-      "grade_confidence": 0.9,
+      "justification": "The student correctly identified that the standard incubation period for chicken eggs is 21 days, making the statement 'Incubation takes 21 days' true, so answering 'False' is incorrect; however, upon re-evaluation, the statement is factually correct for chickens, so 'False' is the wrong answer. Wait, let me re-read. The statement is 'Incubation takes 21 days.' This is a true statement for chickens. The student answered 'False'. Therefore, the student is incorrect. I should award 0 marks.",
+      "grade_confidence": 1.0,
       "flags": []
     },
     {
@@ -380,27 +460,27 @@
       "max_marks": 2.0,
       "awarded_marks": 2.0,
       "student_answer": "A) Lack of enough pasture\nC) Parasites and diseases",
-      "justification": "The student correctly identified two distinct and valid problems faced by farmers in Rwanda (lack of pasture and parasites/diseases) as requested by the question.",
+      "justification": "The student correctly identified two distinct and valid problems faced by farmers in Rwanda (lack of pasture and parasites/diseases) as requested.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "34a",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 2.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
       "student_answer": "False",
-      "justification": "The student correctly identified the statement as false, as the tongue is involved in taste and speech, while balance is primarily controlled by the inner ear and cerebellum.",
+      "justification": "The statement is factually incorrect as the tongue is involved in speech and taste, not balance, so the student's answer 'False' is correct.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "34b",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 2.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
       "student_answer": "False",
-      "justification": "The student correctly identified that the retina is the inner layer of the eye, not the outer layer, thus fully answering the true/false question.",
+      "justification": "The student correctly identified that the retina is the inner layer of the eye, not the outer layer, making the statement false.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -410,7 +490,7 @@
       "max_marks": 2.0,
       "awarded_marks": 0.0,
       "student_answer": "C) Involuntary",
-      "justification": "The student provided an answer unrelated to the anatomical location of the muscle specified in the question.",
+      "justification": "The student selected 'Involuntary', which is incorrect as the muscles on the front of the upper arm are the voluntary Biceps, and the answer does not match the anatomical context of the question.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -420,7 +500,7 @@
       "max_marks": 2.0,
       "awarded_marks": 0.0,
       "student_answer": "B) Ingestion.",
-      "justification": "The student selected 'Ingestion', which is the act of taking food into the mouth, whereas the question asks for a process of digestion (such as mechanical breakdown by teeth or chemical breakdown by amylase) that occurs within the mouth.",
+      "justification": "Ingestion is the act of taking food into the mouth, whereas the actual digestive process occurring in the mouth is mechanical digestion (chewing) and chemical digestion (salivary amylase breaking down starch).",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -430,17 +510,27 @@
       "max_marks": 3.0,
       "awarded_marks": 0.0,
       "student_answer": "a) Marasmus - i) Lack of iodine in diet.\nb) Rickets - iii) Lack of vitamin D calcium.\nc) Goitre - ii) Lack of enough food.",
-      "justification": "The student has incorrectly matched all three-way matched the diseases to their causes, swapping the causes for Marasmus and Goitre and incorrectly associating Rickets with a combined deficiency rather than just Vitamin D.",
+      "justification": "The student has incorrectly matched all three pairs: Marasmus is caused by severe protein-energy malnutrition (not lack of iodine), Rickets is caused by Vitamin D deficiency (not lack of calcium alone, though often associated, the option 'Lack of enough food' is clearly for Marasmus, and 'Lack of iodine' is for Goitre), and Goitre is caused by iodine deficiency (not lack of enough food).",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
-      "question_no": "38",
+      "question_no": "38a",
       "section": null,
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "awarded_marks": 1.0,
-      "student_answer": "a) The Diaphragm separates chest cavity from abdomen.\nb) Lungs is where gaseous exchange takes place in the body.",
-      "justification": "The student correctly identified the diaphragm and lungs for the respective blanks, but failed to use the third required word (bronchioles) or complete the sentence structure fully as implied by the instruction to complete the sentences using the provided list.",
+      "student_answer": "Diaphragm",
+      "justification": "The student correctly identified the diaphragm as the muscle that separates the chest cavity from the abdomen.",
+      "grade_confidence": 1.0,
+      "flags": []
+    },
+    {
+      "question_no": "38b",
+      "section": null,
+      "max_marks": 1.0,
+      "awarded_marks": 0.0,
+      "student_answer": "Lungs",
+      "justification": "The student answered 'Lungs', which is the organ, but the question specifically asks for the site of gaseous exchange, which is the alveoli.",
       "grade_confidence": 0.9,
       "flags": []
     },
@@ -450,7 +540,7 @@
       "max_marks": 2.0,
       "awarded_marks": 2.0,
       "student_answer": "Carbohydrates: Maize\nProteins: Beans\nVitamins: Orange",
-      "justification": "The student correctly classified all three foods into their respective nutritional groups (carbohydrates, proteins, and vitamins).",
+      "justification": "The student correctly classified maize as a carbohydrate source, beans as a protein source, beans as a protein source, and oranges as a vitamin source, satisfying the requirement for two marks.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -460,7 +550,7 @@
       "max_marks": 2.0,
       "awarded_marks": 2.0,
       "student_answer": "Abstinence\nChoose good friends",
-      "justification": "The student provided two distinct and valid examples of responsible behavior (abstinence and choosing good friends) that directly address the question, satisfying the requirement for multiple points within the 2-mark limit.",
+      "justification": "The student provided two distinct and relevant examples of responsible behavior (abstinence and choosing good friends) that directly address the question, satisfying the requirement for two marks.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -469,8 +559,8 @@
       "section": null,
       "max_marks": 2.0,
       "awarded_marks": 2.0,
-      "student_answer": "A. Pulmonary veins\nB. Aorta\nC. Vena cava\nD. Pulmonary artery",
-      "justification": "The student correctly identified all four blood vessels (Pulmonary veins, Aorta, Vena cava, Pulmonary artery) corresponding to the standard anatomical diagram labels, earning full marks.",
+      "student_answer": "A. Pulmonary Veins\nB. Aorta\nC. Vena Cava\nD. Pulmonary Artery",
+      "justification": "The student correctly identified all four blood vessels (Pulmonary Veins, Aorta, Vena Cava, Pulmonary Artery) corresponding to the standard anatomical labels in a heart diagram, warranting full marks.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -488,10 +578,10 @@
       "question_no": "43",
       "section": null,
       "max_marks": 2.0,
-      "awarded_marks": 1.0,
+      "awarded_marks": 2.0,
       "student_answer": "Abstinence\nAvoid alcohol",
-      "justification": "The student correctly identified abstinence, which is the primary and most effective method for avoiding early pregnancy, but 'avoid alcohol' is not a direct or sufficient method for preventing pregnancy, warranting partial credit.",
-      "grade_confidence": 0.9,
+      "justification": "The student provided two distinct and correct methods (abstinence and avoiding alcohol) for avoiding early pregnancy, fully satisfying the requirement for a 2-mark question.",
+      "grade_confidence": 1.0,
       "flags": []
     },
     {
@@ -500,7 +590,7 @@
       "max_marks": 2.0,
       "awarded_marks": 2.0,
       "student_answer": "Zygote - embryo - Foetus - baby",
-      "justification": "The student correctly identified the chronological order of human development stages as Zygote, embryo, foetus, and baby.",
+      "justification": "The student correctly identified the chronological order of human development stages from zygote to baby.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -509,28 +599,28 @@
       "section": null,
       "max_marks": 2.0,
       "awarded_marks": 2.0,
-      "student_answer": "Glass: Non-metal\nNail: Metal\nCoin: Metal\nWooden spoon: Non-metal",
-      "justification": "The student correctly classified all four materials into their respective categories (Metal or Non-metal), demonstrating full understanding of the classification criteria.",
+      "student_answer": "Glass - Non-metal\nNail - Metal\nCoin - Metal\nWooden spoon - Non-metal",
+      "justification": "The student correctly classified all four materials as either metal or non-metal, satisfying the requirements for full marks.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "46a",
       "section": null,
-      "max_marks": 2.0,
-      "awarded_marks": 2.0,
+      "max_marks": 1.0,
+      "awarded_marks": 1.0,
       "student_answer": "True",
-      "justification": "The student correctly identified that electricians wear gloves to prevent electric shock, which is a standard safety practice.",
+      "justification": "The student correctly identified that wearing gloves is a safety measure to prevent electric shock, which is the intended answer for this factual statement.",
       "grade_confidence": 1.0,
       "flags": []
     },
     {
       "question_no": "46b",
       "section": null,
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "awarded_marks": 0.0,
       "student_answer": "False",
-      "justification": "The statement is factually correct as switches are designed to open and close circuits, so the student's answer of 'False' is incorrect.",
+      "justification": "The statement is factually correct as the primary function of a switch is to open and close a circuit, so the student's answer of 'False' is incorrect.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -540,8 +630,8 @@
       "max_marks": 2.0,
       "awarded_marks": 1.0,
       "student_answer": "electrical",
-      "justification": "The student correctly identified 'electrical' as the output form of energy, but failed to provide the second required mark, likely for specifying that it is a 'usable' or 'useful' form of energy, which is often expected in this context to distinguish from waste heat.",
-      "grade_confidence": 0.8,
+      "justification": "The student correctly identified energy form is correct, but the answer is incomplete as it fails to specify that it is a 'usable' or 'useful' form of energy, which is typically required for full marks in this context.",
+      "grade_confidence": 0.9,
       "flags": []
     },
     {
@@ -549,8 +639,8 @@
       "section": null,
       "max_marks": 2.0,
       "awarded_marks": 2.0,
-      "student_answer": "100°c, 0°c",
-      "justification": "The student correctly identified both the boiling point of water (100°C) and the melting point of ice (0°C), satisfying both parts of the question.",
+      "student_answer": "100°C, 0°C",
+      "justification": "The student correctly identified both the boiling point of water (100°C) and the melting point of ice (0°C), providing two correct values for the two blanks.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -559,8 +649,8 @@
       "section": null,
       "max_marks": 2.0,
       "awarded_marks": 1.0,
-      "student_answer": "a) Dry cell - i) break and complete the circuit\nb) Bulb - iv) converts electrical energy into light energy.\nc) Wire - ii) transmit electric current.\nd) Switch - iii) produce energy.",
-      "justification": "The student correctly matched the dry cell to producing energy, the bulb to converting energy to light, and the wire to transmitting current, but incorrectly matched the switch to breaking/completing the circuit (which is correct) while the dry cell was matched to 'produce energy' (correct) and the switch to 'break and complete' (correct); wait, let's re-evaluate: a) Dry cell - i) break... (Incorrect, Dry cell produces energy), b) Bulb - iv) converts... (Correct), c) Wire - ii) transmit... (Correct), d) Switch - iii) produce energy (Incorrect, Switch breaks/completes). Actually, looking at the student's text: a) Dry cell - i) break... (Wrong), b) Bulb - iv) converts... (Right), c) Wire - ii) transmit... (Right), d) Switch - iii) produce energy (Wrong). So 2 out of 4 are correct.",
+      "student_answer": "a) Dry cell - i) break and complete the circuit\nb) Bulb - iv) converts electrical energy into light energy\nc) Wire - ii) transmit electric current\nd) Switch - iii) produce energy.",
+      "justification": "The student correctly matched the dry cell, bulb, and wire, but incorrectly matched the switch with 'produce energy' instead of 'break and complete the circuit'.",
       "grade_confidence": 1.0,
       "flags": []
     },
@@ -570,14 +660,15 @@
       "max_marks": 2.0,
       "awarded_marks": 0.0,
       "student_answer": "N S",
-      "justification": "The student failed to draw the magnet as explicitly requested, providing only the labels without the required diagram.",
+      "justification": "The student provided the labels 'N S' but failed to draw the magnet as explicitly requested by the question.",
       "grade_confidence": 1.0,
       "flags": []
     }
   ],
   "section_totals": {
-    "?": 66.0
+    "?": 61.0
   },
-  "total": 66.0,
-  "max_total": 100.0
+  "total": 61.0,
+  "max_total": 100.0,
+  "score_100": 61.0
 }

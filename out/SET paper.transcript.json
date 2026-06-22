@@ -4,6 +4,54 @@
   "questions": [
     {
       "section": null,
+      "question_no": "1a",
+      "max_marks": 0.0,
+      "question_text": "What is the name of the examination?",
+      "student_answer": "PSET",
+      "read_confidence": 0.95
+    },
+    {
+      "section": null,
+      "question_no": "1b",
+      "max_marks": 0.0,
+      "question_text": "What is the date of the examination?",
+      "student_answer": "03/07/2025",
+      "read_confidence": 0.98
+    },
+    {
+      "section": null,
+      "question_no": "1c",
+      "max_marks": 0.0,
+      "question_text": "What is the time of the examination?",
+      "student_answer": "09:00 AM - 11:00 AM",
+      "read_confidence": 0.97
+    },
+    {
+      "section": null,
+      "question_no": "1d",
+      "max_marks": 0.0,
+      "question_text": "What is the duration of the examination?",
+      "student_answer": "Two hours",
+      "read_confidence": 0.96
+    },
+    {
+      "section": null,
+      "question_no": "1e",
+      "max_marks": 0.0,
+      "question_text": "What is the total number of marks for the examination?",
+      "student_answer": "/100",
+      "read_confidence": 0.95
+    },
+    {
+      "section": null,
+      "question_no": "1f",
+      "max_marks": 0.0,
+      "question_text": "What is the name of the authority conducting the examination?",
+      "student_answer": "National Examination and School Inspection Authority",
+      "read_confidence": 0.94
+    },
+    {
+      "section": null,
       "question_no": "1",
       "max_marks": 1.0,
       "question_text": "Select and circle a tool that is used for transport on a farm.",
@@ -21,7 +69,7 @@
     {
       "section": null,
       "question_no": "3a",
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "question_text": "State the use of the following carpentry tools: a) A meter ruler",
       "student_answer": "used to measure length of the wood",
       "read_confidence": 0.9
@@ -29,7 +77,7 @@
     {
       "section": null,
       "question_no": "3b",
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "question_text": "State the use of the following carpentry tools: b) A wood saw",
       "student_answer": "used for cutting wood",
       "read_confidence": 0.9
@@ -37,7 +85,7 @@
     {
       "section": null,
       "question_no": "4a",
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "question_text": "State whether the following statements are True or False. a) A blacksmith uses a hammer to shape metal.",
       "student_answer": "True",
       "read_confidence": 0.95
@@ -45,7 +93,7 @@
     {
       "section": null,
       "question_no": "4b",
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "question_text": "State whether the following statements are True or False. b) A simple machine uses a single applied force to do work against single load.",
       "student_answer": "True",
       "read_confidence": 0.95
@@ -88,7 +136,7 @@
       "max_marks": 1.0,
       "question_text": "The process by which plants lose water into the atmosphere through the leaves is known as",
       "student_answer": "Transpiration",
-      "read_confidence": 0.95
+      "read_confidence": 0.9
     },
     {
       "section": null,
@@ -100,41 +148,49 @@
     },
     {
       "section": null,
-      "question_no": "11",
-      "max_marks": 2.0,
-      "question_text": "State whether the statements below are True or False.\na) A computer requires programs to function.\nb) Scratch and Turtle art are two popular programming languages for kids.",
-      "student_answer": "a) True\nb) True",
-      "read_confidence": 0.9
+      "question_no": "11a",
+      "max_marks": 1.0,
+      "question_text": "A computer requires programs to function.",
+      "student_answer": "True",
+      "read_confidence": 0.95
+    },
+    {
+      "section": null,
+      "question_no": "11b",
+      "max_marks": 1.0,
+      "question_text": "Scratch and Turtle art are two popular programming languages for kids.",
+      "student_answer": "True",
+      "read_confidence": 0.95
     },
     {
       "section": null,
       "question_no": "12a",
-      "max_marks": 2.0,
-      "question_text": "...... for underlining a word or a sentence.",
+      "max_marks": 1.0,
+      "question_text": "...................................................for underlining a word or a sentence.",
       "student_answer": "Underline text",
       "read_confidence": 0.95
     },
     {
       "section": null,
       "question_no": "12b",
-      "max_marks": 2.0,
-      "question_text": "...... for changing the colour of the text.",
+      "max_marks": 1.0,
+      "question_text": "...................................................for changing the colour of the text.",
       "student_answer": "Colouring the text",
       "read_confidence": 0.95
     },
     {
       "section": null,
       "question_no": "13i",
-      "max_marks": 2.0,
-      "question_text": "Electronic device that accepts, processes, organises and stores data is known as......",
+      "max_marks": 1.0,
+      "question_text": "Electronic device that accepts, processes, organises and stores data is known as .................................",
       "student_answer": "Computer",
       "read_confidence": 0.98
     },
     {
       "section": null,
       "question_no": "13ii",
-      "max_marks": 2.0,
-      "question_text": "A large group of computers connected to each other is......",
+      "max_marks": 1.0,
+      "question_text": "A large group of computers connected to each other is.................................",
       "student_answer": "Internet",
       "read_confidence": 0.98
     },
@@ -144,7 +200,7 @@
       "max_marks": 2.0,
       "question_text": "Arrange the following ways of saving a document:",
       "student_answer": "b a c d",
-      "read_confidence": 0.95
+      "read_confidence": 0.9
     },
     {
       "section": null,
@@ -152,7 +208,7 @@
       "max_marks": 1.0,
       "question_text": "Why should people learn scratch activity?",
       "student_answer": "To create dialogue and cartoons",
-      "read_confidence": 0.95
+      "read_confidence": 0.9
     },
     {
       "section": null,
@@ -196,10 +252,18 @@
     },
     {
       "section": null,
-      "question_no": "21",
-      "max_marks": 2.0,
-      "question_text": "State whether the statements below are True or False.",
-      "student_answer": "a) True\nb) True",
+      "question_no": "21a",
+      "max_marks": 1.0,
+      "question_text": "Oxygen supports the burning of wood.",
+      "student_answer": "True",
+      "read_confidence": 0.98
+    },
+    {
+      "section": null,
+      "question_no": "21b",
+      "max_marks": 1.0,
+      "question_text": "Trees provide oxygen.",
+      "student_answer": "True",
       "read_confidence": 0.98
     },
     {
@@ -270,7 +334,7 @@
       "section": null,
       "question_no": "30",
       "max_marks": 2.0,
-      "question_text": "is a mammal",
+      "question_text": "Choose and circle the correct answer. ................. is a mammal",
       "student_answer": "B) Dog",
       "read_confidence": 0.95
     },
@@ -278,25 +342,25 @@
       "section": null,
       "question_no": "31",
       "max_marks": 2.0,
-      "question_text": "The grouping of animals according to their common characteristics is called",
+      "question_text": "The grouping of animals according to their common characteristics is called................",
       "student_answer": "B) Classification.",
-      "read_confidence": 0.98
+      "read_confidence": 0.95
     },
     {
       "section": null,
       "question_no": "32a",
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "question_text": "a) Coccidiosis is an infectious disease of chicken.",
       "student_answer": "True",
-      "read_confidence": 0.97
+      "read_confidence": 0.98
     },
     {
       "section": null,
       "question_no": "32b",
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "question_text": "b) Incubation takes 21 days.",
       "student_answer": "False",
-      "read_confidence": 0.96
+      "read_confidence": 0.98
     },
     {
       "section": null,
@@ -309,24 +373,24 @@
     {
       "section": null,
       "question_no": "34a",
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "question_text": "a) Tongue enables us to balance our body.",
       "student_answer": "False",
-      "read_confidence": 0.97
+      "read_confidence": 0.98
     },
     {
       "section": null,
       "question_no": "34b",
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "question_text": "b) Retina is the outer layer of the eye.",
       "student_answer": "False",
-      "read_confidence": 0.97
+      "read_confidence": 0.98
     },
     {
       "section": null,
       "question_no": "35",
       "max_marks": 2.0,
-      "question_text": "muscles is on the front of the upper arm",
+      "question_text": "Choose and circle the correct answer. ................. muscles is on the front of the upper arm",
       "student_answer": "C) Involuntary",
       "read_confidence": 0.95
     },
@@ -348,19 +412,27 @@
     },
     {
       "section": null,
-      "question_no": "38",
-      "max_marks": 2.0,
-      "question_text": "Complete the following sentences using the words below. Lungs, Diaphragm, Bronchioles.",
-      "student_answer": "a) The Diaphragm separates chest cavity from abdomen.\nb) Lungs is where gaseous exchange takes place in the body.",
-      "read_confidence": 0.9
+      "question_no": "38a",
+      "max_marks": 1.0,
+      "question_text": "The .............. separate chest cavity from abdomen.",
+      "student_answer": "Diaphragm",
+      "read_confidence": 0.98
+    },
+    {
+      "section": null,
+      "question_no": "38b",
+      "max_marks": 1.0,
+      "question_text": ".............. is where gaseous exchange takes place in the body.",
+      "student_answer": "Lungs",
+      "read_confidence": 0.98
     },
     {
       "section": null,
       "question_no": "39",
       "max_marks": 2.0,
-      "question_text": "Classify the foods given below according to their groups. Maize, oranges, beans.",
+      "question_text": "Classify the foods given below according to their groups.",
       "student_answer": "Carbohydrates: Maize\nProteins: Beans\nVitamins: Orange",
-      "read_confidence": 0.95
+      "read_confidence": 0.9
     },
     {
       "section": null,
@@ -368,14 +440,14 @@
       "max_marks": 2.0,
       "question_text": "As an adolescent boy or girl in P6, what are some responsible behavior can you take to make right decisions concerning your life.",
       "student_answer": "Abstinence\nChoose good friends",
-      "read_confidence": 0.9
+      "read_confidence": 0.95
     },
     {
       "section": null,
       "question_no": "41",
       "max_marks": 2.0,
       "question_text": "Name the blood vessels marked A, B, C and D.",
-      "student_answer": "A. Pulmonary veins\nB. Aorta\nC. Vena cava\nD. Pulmonary artery",
+      "student_answer": "A. Pulmonary Veins\nB. Aorta\nC. Vena Cava\nD. Pulmonary Artery",
       "read_confidence": 0.95
     },
     {
@@ -407,13 +479,13 @@
       "question_no": "45",
       "max_marks": 2.0,
       "question_text": "Classify with a Tick (√) the materials in the column given below.",
-      "student_answer": "Glass: Non-metal\nNail: Metal\nCoin: Metal\nWooden spoon: Non-metal",
+      "student_answer": "Glass - Non-metal\nNail - Metal\nCoin - Metal\nWooden spoon - Non-metal",
       "read_confidence": 0.9
     },
     {
       "section": null,
       "question_no": "46a",
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "question_text": "Electrician wears gloves to prevent electric shock.",
       "student_answer": "True",
       "read_confidence": 0.95
@@ -421,7 +493,7 @@
     {
       "section": null,
       "question_no": "46b",
-      "max_marks": 2.0,
+      "max_marks": 1.0,
       "question_text": "The switch is used to open and close the circuit.",
       "student_answer": "False",
       "read_confidence": 0.95
@@ -439,7 +511,7 @@
       "question_no": "48",
       "max_marks": 2.0,
       "question_text": "...... is the boiling point of water while...... is the melting point of ice.",
-      "student_answer": "100°c, 0°c",
+      "student_answer": "100°C, 0°C",
       "read_confidence": 0.98
     },
     {
@@ -447,7 +519,7 @@
       "question_no": "49",
       "max_marks": 2.0,
       "question_text": "Match the parts of the simple electric circuit with their roles.",
-      "student_answer": "a) Dry cell - i) break and complete the circuit\nb) Bulb - iv) converts electrical energy into light energy.\nc) Wire - ii) transmit electric current.\nd) Switch - iii) produce energy.",
+      "student_answer": "a) Dry cell - i) break and complete the circuit\nb) Bulb - iv) converts electrical energy into light energy\nc) Wire - ii) transmit electric current\nd) Switch - iii) produce energy.",
       "read_confidence": 0.9
     },
     {

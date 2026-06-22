@@ -91,21 +91,21 @@ healthy before a live run.
 
 ## Results (all three graded, regenerated 2026-06-22)
 
-The committed grades under `out/` are from this run:
+Every paper is scored on a normalized **0–100 scale** (`score_100 = 100 × awarded ÷
+max_marks`), so grades are comparable across papers and can never exceed 100. The committed
+grades under `out/` are from this run:
 
-| Paper | Total | Questions | Blank | Need review | Σ max_marks |
-|-------|-------|-----------|-------|-------------|-------------|
-| Math    | 68/100  | 38 | 0  | 0 | 88  |
-| English | **119/100** | 75 | 30 | 0 | 170 |
-| SET     | 66/100  | 57 | 1  | 0 | 114 |
+| Paper | Grade /100 | Raw | Questions | Blank |
+|-------|-----------|-----|-----------|-------|
+| Math    | 71.4 | 40/56  | 38 | 0  |
+| English | 62.4 | 88/141 | 75 | 10 |
+| SET     | 61.0 | 61/100 | 66 | 1  |
 
-**Caveat — totals can exceed 100.** English came out 119/100 because the transcriber
-over-attributes marks: for multi-part questions it tags each sub-part with the parent's
-"(N marks)" label, so the per-question `max_marks` sum to 170 on a /100 paper. Math (Σ=88)
-and SET (Σ=114) show the same effect to a lesser degree. The objective Math transcription
-still matched ground truth exactly (Q1 a–e, Q2, Q3a). Treat these numbers as a pipeline
-demonstration, not final marks — see Known limitations. Scores also vary run-to-run because
-the POC uses an LLM as judge.
+The "raw" denominator is the sum of the transcribed `max_marks`. It still drifts from the
+paper's true 100 (English 141, Math 56) because the vision model reads per-question marks
+imperfectly — the normalized `/100` grade absorbs that, but the **only true fix is feeding
+the official marking guide** (the `MarkScheme` interface is built for it). Treat these as a
+pipeline demonstration; LLM-judge scores also vary run-to-run.
 
 ## Performance
 
@@ -126,11 +126,11 @@ The ⚠ marker fires only on review-worthy flags, not on blank answers.
 
 ## Known limitations (POC)
 
-- **Mark over-attribution → totals can exceed 100.** The transcriber assigns the printed
-  "(N marks)" of a multi-part question to *each* sub-part, so `max_marks` (and thus the
-  awarded total) inflate past the paper's real maximum (English Σ=170 on /100). Fixing this
-  needs the transcriber to attribute marks once per mark-bearing unit, and `max_total` to be
-  derived from the paper rather than hardcoded to 100.
+- **Mark attribution is noisy.** The vision model reads each question's "(N marks)" label
+  imperfectly, so the raw denominator drifts from the paper's true 100 (e.g. English 141).
+  This is now contained — `max_total` is derived from the paper and the headline grade is
+  normalized to `/100`, so totals can no longer exceed 100 — but the denominator is only as
+  accurate as the OCR. The real fix is the official marking guide via a `MarkScheme`.
 - LLM-judge scores vary between runs; not yet deterministic.
 - The vision model scales only ~2× concurrently (memory-bound at its current util); more
   speed needs lower DPI or more VRAM headroom for batching.

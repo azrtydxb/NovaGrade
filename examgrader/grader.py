@@ -60,7 +60,7 @@ class LLMJudge:
 
 
 def grade_paper(
-    scheme: MarkScheme, paper: TranscribedPaper, max_total: float = 100.0,
+    scheme: MarkScheme, paper: TranscribedPaper, max_total: float | None = None,
     max_workers: int | None = None,
 ) -> GradedPaper:
     workers = SETTINGS.grader_concurrency if max_workers is None else max_workers
@@ -70,7 +70,12 @@ def grade_paper(
         key = g.section or "?"
         section_totals[key] = section_totals.get(key, 0.0) + g.awarded_marks
     total = sum(g.awarded_marks for g in graded)
+    # max_total derived from the paper's own marks so the total can never exceed it
+    if max_total is None:
+        max_total = sum(q.max_marks for q in paper.questions)
+    score_100 = round(100 * total / max_total, 1) if max_total else 0.0
     return GradedPaper(
         subject=paper.subject, source_pdf=paper.source_pdf, questions=graded,
         section_totals=section_totals, total=total, max_total=max_total,
+        score_100=score_100,
     )

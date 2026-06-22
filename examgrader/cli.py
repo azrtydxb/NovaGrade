@@ -40,6 +40,6 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     subject = args.subject or os.path.splitext(os.path.basename(args.pdf))[0]
     paper = grade_pdf(args.pdf, subject, out_dir=args.out)
-    print(f"{subject}: {paper.total:g}/{paper.max_total:g}")
+    print(f"{subject}: {paper.score_100:g}/100  (raw {paper.total:g}/{paper.max_total:g})")
     print(f"Reports written under {args.out}/", file=sys.stderr)
     return 0

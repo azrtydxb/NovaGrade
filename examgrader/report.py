@@ -11,10 +11,11 @@ def to_json(paper: GradedPaper) -> str:
 
 
 def to_markdown(paper: GradedPaper) -> str:
+    pct = round(100 * paper.total / paper.max_total, 1) if paper.max_total else 0.0
     lines = [
         f"# {paper.subject} — graded ({paper.source_pdf})",
         "",
-        f"**Total: {paper.total:g} / {paper.max_total:g}**",
+        f"**Grade: {pct:g} / 100**  ·  raw {paper.total:g}/{paper.max_total:g}",
         "",
         "| Q | Section | Marks | Conf | Flags | Justification |",
         "|---|---------|-------|------|-------|---------------|",

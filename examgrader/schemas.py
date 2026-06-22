@@ -34,3 +34,4 @@ class GradedPaper(BaseModel):
     section_totals: dict[str, float]
     total: float
     max_total: float
+    score_100: float = 0.0  # total normalized to a 0–100 scale

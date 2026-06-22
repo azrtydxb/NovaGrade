@@ -61,7 +61,32 @@ def test_grade_paper_totals(fake_client_factory):
     gp = grader.grade_paper(grader.LLMJudge(client), paper, max_workers=1)
     assert gp.total == 3.0
     assert gp.section_totals == {"A": 1.0, "B": 2.0}
-    assert gp.max_total == 100.0
+    assert gp.max_total == 4.0  # derived from sum of max_marks (1+1+2)
+
+
+def test_grade_paper_max_total_derived_and_not_exceeded(fake_client_factory):
+    # even if the model returns inflated marks, derived max_total >= total
+    client = fake_client_factory([
+        {"awarded_marks": 5, "justification": "x", "grade_confidence": 1.0},
+        {"awarded_marks": 5, "justification": "y", "grade_confidence": 1.0},
+    ])
+    paper = TranscribedPaper(subject="X", source_pdf="x.pdf", questions=[
+        _q("1a", 5, "a", section="A"),
+        _q("1b", 5, "b", section="A"),
+    ])
+    gp = grader.grade_paper(grader.LLMJudge(client), paper, max_workers=1)
+    assert gp.max_total == 10.0      # 5 + 5, not hardcoded 100
+    assert gp.total <= gp.max_total
+    assert gp.score_100 == 100.0     # 10/10 normalized to 100
+
+
+def test_grade_paper_explicit_max_total_respected(fake_client_factory):
+    client = fake_client_factory([
+        {"awarded_marks": 1, "justification": "x", "grade_confidence": 1.0},
+    ])
+    paper = TranscribedPaper(subject="X", source_pdf="x.pdf", questions=[_q("1a", 1, "a")])
+    gp = grader.grade_paper(grader.LLMJudge(client), paper, max_total=100.0, max_workers=1)
+    assert gp.max_total == 100.0  # explicit override still honored
 
 
 def test_grade_paper_concurrent_preserves_order_and_totals():

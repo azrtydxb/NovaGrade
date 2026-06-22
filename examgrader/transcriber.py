@@ -15,7 +15,10 @@ TRANSCRIBE_PROMPT = (
     "Return ONLY a JSON array; each element has keys: "
     '"section" (the section letter/number this question belongs to, or null), '
     '"question_no" (e.g. "1a"), '
-    '"max_marks" (number from the printed "(N marks)" label, or 0 if none shown), '
+    '"max_marks" (the marks for THIS item only; if one "(N marks)" label covers '
+    "several lettered sub-parts a, b, c..., divide N evenly across those sub-parts so "
+    "their max_marks sum to N — never give each sub-part the full N; use 0 if no marks "
+    "are shown), "
     '"question_text" (the printed question, concise), '
     '"student_answer" (the handwriting transcribed exactly; use an empty string if the '
     "answer space is blank or you cannot read it — never guess or invent an answer), "

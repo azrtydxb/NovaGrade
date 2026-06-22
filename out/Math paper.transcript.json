@@ -5,40 +5,40 @@
     {
       "section": null,
       "question_no": "1a",
-      "max_marks": 5.0,
-      "question_text": "Which of the following statements is true or false? a) (-3) × (-2) = -6",
+      "max_marks": 1.0,
+      "question_text": "(-3) × (-2) = -6",
       "student_answer": "False",
       "read_confidence": 0.95
     },
     {
       "section": null,
       "question_no": "1b",
-      "max_marks": 5.0,
-      "question_text": "Which of the following statements is true or false? b) (-2) + (-3) = -5",
+      "max_marks": 1.0,
+      "question_text": "(-2) + (-3) = -5",
       "student_answer": "True",
       "read_confidence": 0.98
     },
     {
       "section": null,
       "question_no": "1c",
-      "max_marks": 5.0,
-      "question_text": "Which of the following statements is true or false? c) (-2) × (-3) = +6",
+      "max_marks": 1.0,
+      "question_text": "(-2) × (-3) = +6",
       "student_answer": "True",
-      "read_confidence": 0.97
+      "read_confidence": 0.98
     },
     {
       "section": null,
       "question_no": "1d",
-      "max_marks": 5.0,
-      "question_text": "Which of the following statements is true or false? d) (-3) - (-2) = -5",
+      "max_marks": 1.0,
+      "question_text": "(-3) - (-2) = -5",
       "student_answer": "False",
-      "read_confidence": 0.96
+      "read_confidence": 0.97
     },
     {
       "section": null,
       "question_no": "1e",
-      "max_marks": 5.0,
-      "question_text": "Which of the following statements is true or false? e) (-3) : (-3) = +1",
+      "max_marks": 1.0,
+      "question_text": "(-3) : (-3) = +1",
       "student_answer": "True",
       "read_confidence": 0.98
     },
@@ -46,7 +46,7 @@
       "section": null,
       "question_no": "2a",
       "max_marks": 1.0,
-      "question_text": "Complete the following sentences using the meaning of the given words: Time, Principal, Rate. a) The money borrowed, saved or lent is ......",
+      "question_text": "The money borrowed, saved or lent is ......",
       "student_answer": "Principal",
       "read_confidence": 0.95
     },
@@ -54,15 +54,15 @@
       "section": null,
       "question_no": "2b",
       "max_marks": 1.0,
-      "question_text": "Complete the following sentences using the meaning of the given words: Time, Principal, Rate. b) The percentage used to calculate interest is ......",
+      "question_text": "The percentage used to calculate interest is ......",
       "student_answer": "Rate",
-      "read_confidence": 0.97
+      "read_confidence": 0.96
     },
     {
       "section": null,
       "question_no": "2c",
       "max_marks": 1.0,
-      "question_text": "Complete the following sentences using the meaning of the given words: Time, Principal, Rate. c) ...... is the period that the borrowed money is invested.",
+      "question_text": "...... is the period that the borrowed money is invested.",
       "student_answer": "Time",
       "read_confidence": 0.94
     },
@@ -70,9 +70,9 @@
       "section": null,
       "question_no": "3a",
       "max_marks": 2.0,
-      "question_text": "Complete the sentences below using radius, diameter or circumference. a) The distance around the circle is ......",
+      "question_text": "The distance around the circle is ......",
       "student_answer": "Circumference",
-      "read_confidence": 0.96
+      "read_confidence": 0.97
     },
     {
       "section": null,
@@ -103,13 +103,13 @@
       "question_no": "5b",
       "max_marks": 2.0,
       "question_text": "What are the values of 2 and 7 in the number 675,982,840?",
-      "student_answer": "7 = Ten millions\n2 = thousands",
+      "student_answer": "7 = Ten millions\n2 = Thousands",
       "read_confidence": 0.96
     },
     {
       "section": null,
       "question_no": "6a",
-      "max_marks": 3.0,
+      "max_marks": 1.0,
       "question_text": "Compare the numbers using <, > or =\n537,926 ... 573,926",
       "student_answer": "<",
       "read_confidence": 0.99
@@ -117,7 +117,7 @@
     {
       "section": null,
       "question_no": "6b",
-      "max_marks": 3.0,
+      "max_marks": 1.0,
       "question_text": "Compare the numbers using <, > or =\n10^6 ... 1,000,000",
       "student_answer": ">",
       "read_confidence": 0.99
@@ -125,7 +125,7 @@
     {
       "section": null,
       "question_no": "6c",
-      "max_marks": 3.0,
+      "max_marks": 1.0,
       "question_text": "Compare the numbers using <, > or =\n210,034 ... 201,034",
       "student_answer": ">",
       "read_confidence": 0.99
@@ -135,7 +135,7 @@
       "question_no": "7",
       "max_marks": 2.0,
       "question_text": "By using the following digits: 5; 2; 9; 4; 0; Write the biggest and the smallest whole number formed by all five digits.",
-      "student_answer": "biggest: 95420\nsmallest: 20459",
+      "student_answer": "Biggest: 95420\nSmallest: 20459",
       "read_confidence": 0.95
     },
     {
@@ -149,7 +149,7 @@
     {
       "section": null,
       "question_no": "12a",
-      "max_marks": 3.0,
+      "max_marks": 1.0,
       "question_text": "4.44 _ 0.40",
       "student_answer": ">",
       "read_confidence": 0.98
@@ -157,7 +157,7 @@
     {
       "section": null,
       "question_no": "12b",
-      "max_marks": 3.0,
+      "max_marks": 1.0,
       "question_text": "3.56 _ 3.65",
       "student_answer": "<",
       "read_confidence": 0.98
@@ -165,7 +165,7 @@
     {
       "section": null,
       "question_no": "12c",
-      "max_marks": 3.0,
+      "max_marks": 1.0,
       "question_text": "3.65 _ 3.650",
       "student_answer": "=",
       "read_confidence": 0.98
@@ -190,7 +190,7 @@
       "section": null,
       "question_no": "17",
       "max_marks": 2.0,
-      "question_text": "A farmer planted 20 trees along a terrace of his land. The trees were planted at intervals of 2 m. What is the length of the terrace planted with trees?",
+      "question_text": "A farmer planted 20 trees along a terrace of his land. The trees were planted at intervals of 2 m. What is the length of the terrace planted with trees? Choose the correct answer:",
       "student_answer": "B: 38 m",
       "read_confidence": 0.95
     },
@@ -285,15 +285,15 @@
     {
       "section": null,
       "question_no": "35a",
-      "max_marks": 3.0,
+      "max_marks": 1.0,
       "question_text": "Complete this frequency table.",
-      "student_answer": "95, 2, 190\n90, 3, 270\n85, 3, 680\n80, 8, 80\n75, 1, 450\n70, 6, 210\n60, 2, 120\nΣf = 25\nΣfx = 2000",
+      "student_answer": "95, 2, 190; 90, 3, 270; 85, 3, 680; 80, 8, 80; 75, 1, 450; 70, 6, 210; 60, 2, 120; Σf = 25; Σfx = 2000",
       "read_confidence": 0.95
     },
     {
       "section": null,
       "question_no": "35b",
-      "max_marks": 0.0,
+      "max_marks": 1.0,
       "question_text": "Modal mark is",
       "student_answer": "85",
       "read_confidence": 0.98
@@ -301,7 +301,7 @@
     {
       "section": null,
       "question_no": "35c",
-      "max_marks": 0.0,
+      "max_marks": 1.0,
       "question_text": "The mean is",
       "student_answer": "2000/25 = 80",
       "read_confidence": 0.97
