@@ -221,3 +221,13 @@ def test_llm_client_includes_seed(monkeypatch):
     llm_client.LLMClient("http://x/v1", "m", seed=0).chat_json("hi")
     assert captured["p"]["seed"] == 0
     assert captured["p"]["temperature"] == 0.0
+
+
+def test_guide_coverage_reports_gaps():
+    guide = {"1a": {"max_marks": 1, "answer": "x"}, "9z": {"max_marks": 1, "answer": "y"}}
+    paper = TranscribedPaper(subject="S", source_pdf="s.pdf", questions=[
+        _q("1a", 1, "x"), _q("2b", 1, "z"),
+    ])
+    uncovered, unused = grader.guide_coverage(guide, paper)
+    assert uncovered == ["2b"]   # in paper, not in guide -> falls back
+    assert unused == ["9z"]      # in guide, not seen in paper

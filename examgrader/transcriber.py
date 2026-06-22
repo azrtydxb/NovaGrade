@@ -53,6 +53,20 @@ def _transcribe_one_page(client, png_path: str) -> list[TranscribedQuestion]:
     return out
 
 
+def _dedupe_question_nos(questions: list[TranscribedQuestion]) -> list[TranscribedQuestion]:
+    """Make question_no values unique so none is silently lost downstream (guide keys and
+    the scaffolder are keyed by question_no). Repeats get a '#N' suffix."""
+    seen: dict[str, int] = {}
+    for q in questions:
+        n = q.question_no
+        if n in seen:
+            seen[n] += 1
+            q.question_no = f"{n}#{seen[n]}"
+        else:
+            seen[n] = 1
+    return questions
+
+
 def transcribe_paper(
     client, png_paths, subject: str, source_pdf: str, max_workers: int | None = None
 ) -> TranscribedPaper:
@@ -60,5 +74,5 @@ def transcribe_paper(
     per_page = map_ordered(
         lambda path: _transcribe_one_page(client, path), list(png_paths), workers
     )
-    questions = [q for page_questions in per_page for q in page_questions]
+    questions = _dedupe_question_nos([q for page_questions in per_page for q in page_questions])
     return TranscribedPaper(subject=subject, source_pdf=source_pdf, questions=questions)

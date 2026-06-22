@@ -70,3 +70,16 @@ def test_transcribe_paper_skips_bad_question_keeps_good(fake_client_factory, tmp
     client = fake_client_factory([page])
     tp = transcriber.transcribe_paper(client, [str(p)], "Math", "Math paper.pdf")
     assert [q.question_no for q in tp.questions] == ["1a", "1c"]
+
+
+def test_transcribe_paper_dedupes_question_nos(fake_client_factory, tmp_path):
+    p = tmp_path / "page-01.png"; p.write_bytes(b"\x89PNG\r\n")
+    page = [
+        {"question_no": "b", "max_marks": 1, "question_text": "x", "student_answer": "1", "read_confidence": 0.9},
+        {"question_no": "b", "max_marks": 1, "question_text": "y", "student_answer": "2", "read_confidence": 0.9},
+        {"question_no": "b", "max_marks": 1, "question_text": "z", "student_answer": "3", "read_confidence": 0.9},
+    ]
+    tp = transcriber.transcribe_paper(fake_client_factory([page]), [str(p)], "S", "s.pdf")
+    # all three kept, no silent loss; question_nos unique
+    assert [q.question_no for q in tp.questions] == ["b", "b#2", "b#3"]
+    assert len({q.question_no for q in tp.questions}) == 3
