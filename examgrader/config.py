@@ -13,6 +13,7 @@ class Settings:
     out_dir: str = "out"
     vlm_concurrency: int = 4
     grader_concurrency: int = 8
+    llm_seed: int = 0  # sent to vLLM for more reproducible LLM outputs
 
 
 SETTINGS = Settings()

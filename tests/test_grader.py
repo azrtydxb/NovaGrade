@@ -113,3 +113,111 @@ def test_grade_paper_concurrent_preserves_order_and_totals():
     assert [g.awarded_marks for g in gp.questions] == [1.0, 2.0, 3.0]
     assert gp.section_totals == {"A": 3.0, "B": 3.0}
     assert gp.total == 6.0
+
+
+# --- GuideMarkScheme (deterministic marking-guide grading) ---
+
+class _NoCall:
+    """Fallback/grader stand-in that must NOT be called by deterministic paths."""
+    def __init__(self): self.calls = 0
+    def grade_question(self, q):
+        self.calls += 1
+        return grader.GradedQuestion(question_no=q.question_no, section=q.section,
+            max_marks=q.max_marks, awarded_marks=-1, student_answer=q.student_answer,
+            justification="fallback", grade_confidence=0.0, flags=["fallback"])
+    def chat_json(self, *a, **k):
+        self.calls += 1
+        raise AssertionError("LLM should not be called for objective matching")
+
+
+GUIDE = {
+    "1a": {"max_marks": 5, "answer": "False", "match": "exact"},
+    "2a": {"max_marks": 1, "answer": "principal", "match": "exact_ci"},
+    "3a": {"max_marks": 2, "accept": ["Circumference", "perimeter"], "match": "set"},
+    "D1": {"max_marks": 15, "rubric": "content 6, grammar 5, structure 4", "match": "rubric"},
+}
+
+
+def _guide(fallback=None, client=None):
+    return grader.GuideMarkScheme(GUIDE, fallback=fallback or _NoCall(), client=client)
+
+
+def test_guide_exact_match_awards_full_no_llm():
+    nc = _NoCall()
+    g = grader.GuideMarkScheme(GUIDE, fallback=nc, client=nc).grade_question(_q("1a", 5, "False"))
+    assert g.awarded_marks == 5
+    assert g.max_marks == 5
+    assert g.grade_confidence == 1.0
+    assert nc.calls == 0  # purely deterministic, no model call
+
+
+def test_guide_exact_mismatch_zero():
+    g = _guide().grade_question(_q("1a", 5, "True"))
+    assert g.awarded_marks == 0
+
+
+def test_guide_exact_ci_and_set():
+    assert _guide().grade_question(_q("2a", 1, "Principal")).awarded_marks == 1   # case-insensitive
+    assert _guide().grade_question(_q("3a", 2, "perimeter")).awarded_marks == 2   # accept-list member
+    assert _guide().grade_question(_q("3a", 2, "radius")).awarded_marks == 0
+
+
+def test_guide_blank_is_deterministic_zero_and_flagged():
+    g = _guide().grade_question(_q("1a", 5, "", conf=0.0))
+    assert g.awarded_marks == 0
+    assert g.flags == ["blank_answer"]
+    assert g.grade_confidence == 1.0
+
+
+def test_guide_deterministic_repeat():
+    s = _guide()
+    a = s.grade_question(_q("1a", 5, "False"))
+    b = s.grade_question(_q("1a", 5, "False"))
+    assert (a.awarded_marks, a.justification, a.grade_confidence) == \
+           (b.awarded_marks, b.justification, b.grade_confidence)
+
+
+def test_guide_unknown_question_falls_back():
+    nc = _NoCall()
+    g = grader.GuideMarkScheme(GUIDE, fallback=nc, client=nc).grade_question(_q("99z", 3, "x"))
+    assert nc.calls == 1
+    assert "fallback" in g.flags
+
+
+def test_guide_rubric_uses_client_bounded(fake_client_factory):
+    client = fake_client_factory([
+        {"awarded_marks": 99, "justification": "good essay", "grade_confidence": 0.8},
+    ])
+    g = grader.GuideMarkScheme(GUIDE, fallback=_NoCall(), client=client).grade_question(
+        _q("D1", 15, "A long composition...")
+    )
+    assert g.awarded_marks == 15  # clamped to guide max_marks
+    assert g.max_marks == 15
+
+
+def test_guide_total_marks():
+    assert _guide().total_marks == 23.0  # 5 + 1 + 2 + 15
+
+
+def test_guide_from_file(tmp_path):
+    import json
+    p = tmp_path / "Math.guide.json"
+    p.write_text(json.dumps({"1a": {"max_marks": 5, "answer": "False", "match": "exact"}}))
+    s = grader.GuideMarkScheme.from_file(str(p), fallback=_NoCall())
+    assert s.total_marks == 5.0
+    assert s.grade_question(_q("1a", 5, "False")).awarded_marks == 5
+
+
+def test_llm_client_includes_seed(monkeypatch):
+    from examgrader import llm_client
+    captured = {}
+
+    class FakeResp:
+        def raise_for_status(self): pass
+        def json(self): return {"choices": [{"message": {"content": "{}"}}]}
+
+    monkeypatch.setattr(llm_client.httpx, "post",
+                        lambda url, json=None, timeout=None: captured.update(p=json) or FakeResp())
+    llm_client.LLMClient("http://x/v1", "m", seed=0).chat_json("hi")
+    assert captured["p"]["seed"] == 0
+    assert captured["p"]["temperature"] == 0.0

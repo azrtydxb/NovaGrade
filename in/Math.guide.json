@@ -1,0 +1,12 @@
+{
+  "1a": { "max_marks": 1, "answer": "False", "match": "exact_ci" },
+  "1b": { "max_marks": 1, "answer": "True", "match": "exact_ci" },
+  "1c": { "max_marks": 1, "answer": "True", "match": "exact_ci" },
+  "1d": { "max_marks": 1, "answer": "False", "match": "exact_ci" },
+  "1e": { "max_marks": 1, "answer": "True", "match": "exact_ci" },
+  "2a": { "max_marks": 1, "answer": "Principal", "match": "exact_ci" },
+  "2b": { "max_marks": 1, "answer": "Rate", "match": "exact_ci" },
+  "2c": { "max_marks": 1, "answer": "Time", "match": "exact_ci" },
+  "3a": { "max_marks": 1, "answer": "Circumference", "match": "exact_ci" },
+  "b": { "max_marks": 1, "answer": "Diameter", "match": "exact_ci" }
+}

@@ -49,11 +49,13 @@ def image_part(png_path: str) -> dict:
 
 
 class LLMClient:
-    def __init__(self, base_url: str, model: str, timeout: float = 180.0, max_retries: int = 3):
+    def __init__(self, base_url: str, model: str, timeout: float = 180.0,
+                 max_retries: int = 3, seed: int | None = None):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
         self.max_retries = max_retries
+        self.seed = seed
 
     def chat_json(self, content, *, max_tokens: int = 1500, temperature: float = 0.0):
         payload = {
@@ -62,6 +64,8 @@ class LLMClient:
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        if self.seed is not None:
+            payload["seed"] = self.seed
         last_err = None
         for attempt in range(self.max_retries):
             try:

@@ -84,9 +84,9 @@ healthy before a live run.
 2. `examgrader/transcriber.py` — sends each page to the vision model, which returns
    structured `{question, max_marks, student_answer, read_confidence}` records. A single
    unreadable page or question is skipped, never the whole paper.
-3. `examgrader/grader.py` — the `MarkScheme` interface grades each question. The POC uses
-   `LLMJudge` (the reasoning model decides correctness). Production swaps in a
-   marking-guide implementation without touching the reading stage.
+3. `examgrader/grader.py` — the `MarkScheme` interface grades each question: `LLMJudge` by
+   default, or `GuideMarkScheme` with `--guide` (deterministic, marking-guide-driven). The
+   reading stage is untouched either way.
 4. `examgrader/report.py` — writes the per-question JSON + a readable Markdown report.
 
 ## Results (all three graded, regenerated 2026-06-22)
@@ -124,20 +124,21 @@ Lowering `render_dpi` (200→150) is the cheapest further speedup if OCR accurac
 
 The ⚠ marker fires only on review-worthy flags, not on blank answers.
 
-## Marking guide (the production accuracy path)
+## Marking guide (deterministic, accurate grading)
 
-Grading runs behind a small `MarkScheme` interface (`grade_question(q) -> GradedQuestion`).
-The POC uses **`LLMJudge`** — the reasoning model decides the correct answer itself, which is
-flexible but noisy and can only guess each question's mark allocation. The production path is
-a **`GuideMarkScheme`** that grades against an official **marking guide** you supply.
+Grading runs behind a small `MarkScheme` interface. By default it uses **`LLMJudge`** (the
+reasoning model decides the answer itself — flexible but non-deterministic). Pass `--guide`
+to grade against an official **marking guide** instead:
 
-The guide is a per-subject JSON file next to the exam (e.g. `in/Math.guide.json`), keyed by
-`question_no`, giving the authoritative answer *and* marks per question:
+    uv run python grade.py "in/Math paper.pdf" --guide "in/Math.guide.json"
+
+The guide is a per-subject JSON file keyed by `question_no` with the authoritative answer
+*and* marks per question (see the working example in [`in/Math.guide.json`](in/Math.guide.json)):
 
 ```json
 {
-  "1a": { "max_marks": 1, "answer": "False", "match": "exact" },
-  "2a": { "max_marks": 1, "answer": "Principal", "match": "exact_ci" },
+  "1a": { "max_marks": 1, "answer": "False", "match": "exact_ci" },
+  "3a": { "max_marks": 2, "accept": ["Circumference", "perimeter"], "match": "set" },
   "D1": { "max_marks": 15, "rubric": "content 6, grammar 5, structure 4", "match": "rubric" }
 }
 ```
@@ -145,11 +146,23 @@ The guide is a per-subject JSON file next to the exam (e.g. `in/Math.guide.json`
 - `exact` / `exact_ci` / `set` → deterministic string compare (no LLM, reproducible) for
   objective questions.
 - `rubric` → the LLM awards marks **bounded by the rubric**, for open-ended answers.
+- Questions not in the guide fall back to `LLMJudge`.
 
-Because the guide carries the canonical `max_marks`, it also fixes the denominator drift —
-totals land on the paper's true `/100`. Wiring it in is a one-line scheme swap in
-`cli.grade_pdf`; the reading stage is untouched. This is **designed but not yet implemented**.
-Full detail and diagrams: [`docs/ARCHITECTURE.md` §7](docs/ARCHITECTURE.md#7-grading-strategy-the-markscheme-interface).
+Because the guide carries the canonical `max_marks`, it also pulls the denominator back to the
+paper's true total. Full detail + diagrams:
+[`docs/ARCHITECTURE.md` §7](docs/ARCHITECTURE.md#7-grading-strategy-the-markscheme-interface).
+
+### Reproducible grades
+
+LLM-judged grading varies slightly between runs (vLLM at `temperature=0` is not
+bitwise-deterministic). Two levers make grading reproducible:
+
+- **A marking guide** — objective (`exact`/`exact_ci`/`set`) questions are graded by string
+  compare and are identical every run; a *complete* guide is fully deterministic.
+- **`--from-transcript`** — re-grade a saved `*.transcript.json` without re-running OCR, so
+  grading sees the exact same input each time (and it's much faster):
+
+      uv run python grade.py --from-transcript "out/Math paper.transcript.json" --guide "in/Math.guide.json"
 
 ## Known limitations (POC)
 
@@ -157,8 +170,11 @@ Full detail and diagrams: [`docs/ARCHITECTURE.md` §7](docs/ARCHITECTURE.md#7-gr
   imperfectly, so the raw denominator drifts from the paper's true 100 (e.g. English 141).
   This is now contained — `max_total` is derived from the paper and the headline grade is
   normalized to `/100`, so totals can no longer exceed 100 — but the denominator is only as
-  accurate as the OCR. The real fix is the official marking guide via a `MarkScheme`.
-- LLM-judge scores vary between runs; not yet deterministic.
+  accurate as the OCR. A marking guide (`--guide`) supplies the canonical marks and fixes it.
+- **LLM-judge grading is not bitwise-deterministic** (vLLM batching at `temperature=0`). Use a
+  marking guide for deterministic objective grading, and `--from-transcript` to fix the OCR
+  input — see [Reproducible grades](#reproducible-grades). The `rubric` and fallback LLM paths
+  remain best-effort.
 - The vision model scales only ~2× concurrently (memory-bound at its current util); more
   speed needs lower DPI or more VRAM headroom for batching.
 - LLM-judge grading is best-effort; production should use the official marking guide via a

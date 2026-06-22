@@ -227,18 +227,20 @@ classDiagram
     class GuideMarkScheme {
         +grade_question(q) GradedQuestion
     }
-    MarkScheme <|.. LLMJudge : POC (implemented)
-    MarkScheme <|.. GuideMarkScheme : production (planned)
+    MarkScheme <|.. LLMJudge : implemented
+    MarkScheme <|.. GuideMarkScheme : implemented
     note for LLMJudge "reasoning model decides the<br/>correct answer, then awards marks"
     note for GuideMarkScheme "grades against the official<br/>marking guide input"
 ```
 
-- **`LLMJudge` (today, POC):** sends each question to `qwen3.6-35b`, which decides the
-  correct answer from its own knowledge and awards marks. No ground truth — flexible but
-  noisy, and it can only guess the per-question mark allocation.
-- **`GuideMarkScheme` (planned, production):** grades against a supplied **marking guide**.
-  This is the accuracy fix — the guide provides the canonical answers *and* the canonical
-  `max_marks`, which also eliminates the denominator drift described in §4.
+- **`LLMJudge` (default):** sends each question to `qwen3.6-35b`, which decides the correct
+  answer from its own knowledge and awards marks. No ground truth — flexible but
+  non-deterministic, and it can only guess the per-question mark allocation.
+- **`GuideMarkScheme` (`--guide`):** grades against a supplied **marking guide**. Objective
+  entries are graded by deterministic string comparison (no LLM); open-ended entries are
+  graded by the LLM bounded by the rubric; questions absent from the guide fall back to
+  `LLMJudge`. The guide supplies the canonical answers *and* `max_marks`, which removes the
+  denominator drift from §4 and makes objective grading reproducible run-to-run.
 
 ### Marking-guide input
 
@@ -278,15 +280,34 @@ flowchart TD
     fall --> g
 ```
 
-Wiring it in is a one-line change in `cli.grade_pdf` — choose the scheme:
+The CLI picks the scheme by flag; the transcriber, renderer, report, and schemas are all
+unchanged — the typed `TranscribedPaper` → `GradedPaper` boundary is what makes the swap safe:
 
 ```python
-scheme = GuideMarkScheme.from_file(guide_path) if guide_path else LLMJudge(grader_client)
-paper = grade_paper(scheme, transcript)
+scheme = (GuideMarkScheme.from_file(guide_path, fallback=LLMJudge(grader_client),
+                                    client=grader_client)
+          if guide_path else LLMJudge(grader_client))
+paper = grade_paper(scheme, transcript)   # max_total derived from graded max_marks
 ```
 
-The transcriber, renderer, report, and schemas are all unchanged — the typed
-`TranscribedPaper` → `GradedPaper` boundary is exactly what makes this swap safe.
+    uv run python grade.py "in/Math paper.pdf" --guide "in/Math.guide.json"
+
+### Determinism
+
+Run-to-run score stability comes from two places:
+
+1. **Guide grading is deterministic.** `exact` / `exact_ci` / `set` entries are pure string
+   comparisons — identical every run, no model involved. The more of a paper the guide
+   covers, the more reproducible its grade; a *complete* guide is fully deterministic.
+2. **OCR is fixed by re-grading a saved transcript.** `grade.py --from-transcript
+   <stem>.transcript.json` skips render + vision entirely and grades the persisted
+   transcript, so the input to grading is identical across runs (also a large speed win).
+
+What is *not* fully deterministic: the `LLMJudge` path (and the guide's `rubric` path).
+Requests send `temperature=0` and a fixed `seed` (`config.llm_seed`), but vLLM under
+continuous batching is not bitwise-reproducible, so LLM-judged questions can still vary
+slightly. Deterministic grading therefore means: **complete marking guide + objective
+match types + `--from-transcript`**.
 
 ## 8. Deployment (DGX Spark)
 
