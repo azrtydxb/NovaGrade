@@ -57,7 +57,8 @@ class LLMClient:
         self.max_retries = max_retries
         self.seed = seed
 
-    def chat_json(self, content, *, max_tokens: int = 1500, temperature: float = 0.0):
+    def chat_text(self, content, *, max_tokens: int = 1500, temperature: float = 0.0) -> str:
+        """POST chat/completions and return the raw reply text (no JSON parsing)."""
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": content}],
@@ -73,11 +74,14 @@ class LLMClient:
                     f"{self.base_url}/chat/completions", json=payload, timeout=self.timeout
                 )
                 r.raise_for_status()
-                reply = r.json()["choices"][0]["message"]["content"]
-                return extract_json(reply)
+                return r.json()["choices"][0]["message"]["content"]
             except Exception as e:  # noqa: BLE001 - retry on any failure
                 last_err = e
                 time.sleep(0.5 * (attempt + 1))
         raise RuntimeError(
             f"LLM call to {self.base_url} failed after {self.max_retries} attempts: {last_err}"
         )
+
+    def chat_json(self, content, *, max_tokens: int = 1500, temperature: float = 0.0):
+        """POST chat/completions and return the first JSON value in the reply."""
+        return extract_json(self.chat_text(content, max_tokens=max_tokens, temperature=temperature))

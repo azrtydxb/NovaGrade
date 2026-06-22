@@ -25,14 +25,35 @@ def extract_mark_map(client, png_path: str) -> dict:
         r = client.chat_json([text_part(MARKMAP_PROMPT), image_part(png_path)], max_tokens=400)
     except Exception:  # noqa: BLE001 - a missing mark map just disables reconciliation
         return {}
+    return _normalize_mark_map(r)
+
+
+MARKMAP_FROM_TEXT_PROMPT = (
+    "Below is the transcription of an exam's front/instructions page. Extract the OFFICIAL "
+    "marks distribution as JSON: "
+    '{"total": <total marks number or null>, "sections": {"A": <marks>, ...}}. '
+    "Use section labels exactly as printed; if there are no labelled sections use {}. "
+    "Do not invent values.\n\nTEXT:\n"
+)
+
+
+def extract_mark_map_from_text(text_client, page_text: str) -> dict:
+    """Extract {total, sections} from an already-transcribed instructions page."""
+    try:
+        r = text_client.chat_json([text_part(MARKMAP_FROM_TEXT_PROMPT + page_text)], max_tokens=400)
+    except Exception:  # noqa: BLE001 - a missing mark map just disables reconciliation
+        return {}
+    return _normalize_mark_map(r)
+
+
+def _normalize_mark_map(r) -> dict:
     if not isinstance(r, dict):
         return {}
-    total = r.get("total")
-    sections = r.get("sections") or {}
     out: dict = {}
+    total = r.get("total")
     if isinstance(total, (int, float)):
         out["total"] = float(total)
-    out["sections"] = {str(k): float(v) for k, v in sections.items()
+    out["sections"] = {str(k): float(v) for k, v in (r.get("sections") or {}).items()
                        if isinstance(v, (int, float))}
     return out
 

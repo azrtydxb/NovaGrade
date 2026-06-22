@@ -5,6 +5,8 @@ from dataclasses import dataclass
 class Settings:
     vlm_base_url: str = "http://192.168.10.246:8003/v1"
     vlm_model: str = "qwen3-vl"
+    ocr_base_url: str = "http://192.168.10.246:8004/v1"  # dots.ocr document transcriber
+    ocr_model: str = "dots-ocr"
     grader_base_url: str = "http://192.168.10.246:8888/v1"
     grader_model: str = "qwen3.6-35b"
     render_dpi: int = 200
