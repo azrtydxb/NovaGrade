@@ -150,11 +150,17 @@ classDiagram
         +dict section_totals
         +float total
         +float max_total
+        +float score_100
     }
     TranscribedPaper "1" *-- "many" TranscribedQuestion
     GradedPaper "1" *-- "many" GradedQuestion
     TranscribedQuestion ..> GradedQuestion : graded into
 ```
+
+**Scoring.** `max_total` is **derived** from the paper (the sum of every question's
+`max_marks`), never hardcoded — so `total` can never exceed it. `score_100 = 100 × total ÷
+max_total` is the headline grade on a normalized 0–100 scale, kept comparable across papers
+even when the transcribed mark total drifts from the paper's true maximum.
 
 ## 5. Concurrency model
 
@@ -199,7 +205,90 @@ flowchart TD
 The report's warning marker fires only on review-worthy flags (`low_read_confidence`,
 `grading_failed`) — never on a blank answer.
 
-## 7. Deployment (DGX Spark)
+## 7. Grading strategy: the `MarkScheme` interface
+
+Grading sits behind one small interface so the *how-to-mark* can change without touching the
+reading stage. `grade_paper` depends only on the protocol, not on any concrete grader:
+
+```python
+class MarkScheme(Protocol):
+    def grade_question(self, q: TranscribedQuestion) -> GradedQuestion: ...
+```
+
+```mermaid
+classDiagram
+    class MarkScheme {
+        <<interface>>
+        +grade_question(q) GradedQuestion
+    }
+    class LLMJudge {
+        +grade_question(q) GradedQuestion
+    }
+    class GuideMarkScheme {
+        +grade_question(q) GradedQuestion
+    }
+    MarkScheme <|.. LLMJudge : POC (implemented)
+    MarkScheme <|.. GuideMarkScheme : production (planned)
+    note for LLMJudge "reasoning model decides the<br/>correct answer, then awards marks"
+    note for GuideMarkScheme "grades against the official<br/>marking guide input"
+```
+
+- **`LLMJudge` (today, POC):** sends each question to `qwen3.6-35b`, which decides the
+  correct answer from its own knowledge and awards marks. No ground truth — flexible but
+  noisy, and it can only guess the per-question mark allocation.
+- **`GuideMarkScheme` (planned, production):** grades against a supplied **marking guide**.
+  This is the accuracy fix — the guide provides the canonical answers *and* the canonical
+  `max_marks`, which also eliminates the denominator drift described in §4.
+
+### Marking-guide input
+
+A marking guide is a per-subject file placed alongside the exam (e.g.
+`in/<subject>.guide.json`), keyed by `question_no`:
+
+```json
+{
+  "1a": { "max_marks": 1, "answer": "False", "match": "exact" },
+  "2a": { "max_marks": 1, "answer": "Principal", "match": "exact_ci" },
+  "3a": { "max_marks": 2, "answer": "Circumference", "match": "exact_ci" },
+  "D1": {
+    "max_marks": 15,
+    "rubric": "Award up to 15 for a coherent composition: content (6), grammar (5), structure (4).",
+    "match": "rubric"
+  }
+}
+```
+
+Each entry carries the authoritative `max_marks` plus how to mark:
+
+| `match` | Behaviour |
+|---|---|
+| `exact` / `exact_ci` | Deterministic string compare (case-insensitive for `exact_ci`) — full marks or zero, no LLM call. Fast and reproducible for objective items. |
+| `set` | Answer must match one of an `accept: [...]` list (synonyms, alternate spellings). |
+| `rubric` | Open-ended: the reasoning model awards marks **constrained by the rubric text**, not free-judging. |
+
+```mermaid
+flowchart TD
+    q["TranscribedQuestion (question_no)"] --> look{"entry in guide?"}
+    look -->|"no"| fall["fall back to LLMJudge"]
+    look -->|"yes"| kind{"match type"}
+    kind -->|"exact / set"| det["string compare<br/>(deterministic, no LLM)"]
+    kind -->|"rubric"| rub["LLM awards marks<br/>bounded by the rubric"]
+    det --> g["GradedQuestion"]
+    rub --> g
+    fall --> g
+```
+
+Wiring it in is a one-line change in `cli.grade_pdf` — choose the scheme:
+
+```python
+scheme = GuideMarkScheme.from_file(guide_path) if guide_path else LLMJudge(grader_client)
+paper = grade_paper(scheme, transcript)
+```
+
+The transcriber, renderer, report, and schemas are all unchanged — the typed
+`TranscribedPaper` → `GradedPaper` boundary is exactly what makes this swap safe.
+
+## 8. Deployment (DGX Spark)
 
 Four vLLM containers share the GB10's 121 GB unified memory. The grader was tuned down to
 util 0.6 and the vision model added at util 0.20 so all four coexist.

@@ -124,6 +124,33 @@ Lowering `render_dpi` (200→150) is the cheapest further speedup if OCR accurac
 
 The ⚠ marker fires only on review-worthy flags, not on blank answers.
 
+## Marking guide (the production accuracy path)
+
+Grading runs behind a small `MarkScheme` interface (`grade_question(q) -> GradedQuestion`).
+The POC uses **`LLMJudge`** — the reasoning model decides the correct answer itself, which is
+flexible but noisy and can only guess each question's mark allocation. The production path is
+a **`GuideMarkScheme`** that grades against an official **marking guide** you supply.
+
+The guide is a per-subject JSON file next to the exam (e.g. `in/Math.guide.json`), keyed by
+`question_no`, giving the authoritative answer *and* marks per question:
+
+```json
+{
+  "1a": { "max_marks": 1, "answer": "False", "match": "exact" },
+  "2a": { "max_marks": 1, "answer": "Principal", "match": "exact_ci" },
+  "D1": { "max_marks": 15, "rubric": "content 6, grammar 5, structure 4", "match": "rubric" }
+}
+```
+
+- `exact` / `exact_ci` / `set` → deterministic string compare (no LLM, reproducible) for
+  objective questions.
+- `rubric` → the LLM awards marks **bounded by the rubric**, for open-ended answers.
+
+Because the guide carries the canonical `max_marks`, it also fixes the denominator drift —
+totals land on the paper's true `/100`. Wiring it in is a one-line scheme swap in
+`cli.grade_pdf`; the reading stage is untouched. This is **designed but not yet implemented**.
+Full detail and diagrams: [`docs/ARCHITECTURE.md` §7](docs/ARCHITECTURE.md#7-grading-strategy-the-markscheme-interface).
+
 ## Known limitations (POC)
 
 - **Mark attribution is noisy.** The vision model reads each question's "(N marks)" label
