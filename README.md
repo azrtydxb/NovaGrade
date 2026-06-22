@@ -4,8 +4,17 @@ Grades scanned NESA exam PDFs on the DGX Spark using a two-stage local-LLM pipel
 `pdftoppm` render → `qwen3-vl` (handwriting transcription, port 8003) →
 `qwen3.6-35b` (grading, port 8888) → JSON + Markdown report.
 
+```mermaid
+flowchart LR
+    pdf[("scanned<br/>exam PDF")] --> render["pdf_to_images<br/>pdftoppm"]
+    render -->|"page images"| tr["transcriber<br/>qwen3-vl :8003"]
+    tr -->|"TranscribedPaper"| gr["grader<br/>qwen3.6-35b :8888"]
+    gr -->|"GradedPaper"| rep["report"]
+    rep --> out[("results.json<br/>report.md<br/>transcript.json")]
+```
+
 The three sample papers in this folder are `English paper.pdf`, `Math paper.pdf`, and
-`SET paper.pdf`.
+`SET paper.pdf`. Full design with more diagrams: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
