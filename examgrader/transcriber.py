@@ -101,24 +101,63 @@ def transcribe_paper(
     return TranscribedPaper(subject=subject, source_pdf=source_pdf, questions=questions)
 
 
+def _transcribe_pages(client, png_paths, extra, workers) -> list[list[TranscribedQuestion]]:
+    return map_ordered(lambda p: _transcribe_one_page(client, p, extra), list(png_paths), workers)
+
+
+def _assemble(per_page, subject, source_pdf) -> TranscribedPaper:
+    questions = _dedupe_question_nos([q for page in per_page for q in page])
+    return TranscribedPaper(subject=subject, source_pdf=source_pdf, questions=questions)
+
+
 def transcribe_reconciled(
     client, png_paths, subject: str, source_pdf: str, mark_map: dict | None = None,
     max_passes: int = 2, max_workers: int | None = None,
 ) -> TranscribedPaper:
-    """Transcribe up to `max_passes` times, keeping the pass whose total marks best match the
-    paper's stated total. Stops early on an exact match. Falls back to a single pass when the
-    stated total is unknown."""
-    expected = (mark_map or {}).get("total")
-    best: TranscribedPaper | None = None
-    best_diff: float | None = None
-    passes = max_passes if expected is not None else 1
-    for i in range(max(1, passes)):
-        paper = transcribe_paper(client, png_paths, subject, source_pdf, max_workers, mark_map)
-        if expected is None:
-            return paper
-        diff = abs(sum(q.max_marks for q in paper.questions) - expected)
-        if best is None or diff < best_diff:
-            best, best_diff = paper, diff
-        if diff == 0:
+    """Transcribe, then reconcile against the paper's stated marks.
+
+    If the paper states per-SECTION budgets, re-transcribe only the pages of the sections
+    whose detected marks don't match their budget (targeted; recovers missed questions).
+    Otherwise reconcile against the overall total by re-running whole passes and keeping the
+    closest. Falls back to a single pass when nothing is stated.
+    """
+    from examgrader.markmap import canonical_section, map_sections, section_sums
+
+    workers = SETTINGS.vlm_concurrency if max_workers is None else max_workers
+    mark_map = mark_map or {}
+    extra = mark_budget_hint(mark_map)
+    png_paths = list(png_paths)
+    per_page = _transcribe_pages(client, png_paths, extra, workers)
+
+    budgets = map_sections(mark_map)
+    if budgets:
+        for _ in range(max(0, max_passes - 1)):
+            detected = section_sums([q for page in per_page for q in page])
+            off = {s for s, b in budgets.items() if detected.get(s, 0.0) != b}
+            if not off:
+                break
+            targets = sorted({i for i, page in enumerate(per_page)
+                              for q in page if canonical_section(q.section) in off})
+            if not targets:
+                break
+            focus = (extra + " Focus on these sections — capture EVERY question and read its "
+                     "marks correctly: " +
+                     ", ".join(f"Section {s} (worth {budgets[s]:g} in total)" for s in sorted(off)) + ".")
+            for i in targets:
+                per_page[i] = _transcribe_one_page(client, png_paths[i], focus)
+        return _assemble(per_page, subject, source_pdf)
+
+    expected = mark_map.get("total")
+    if expected is None:
+        return _assemble(per_page, subject, source_pdf)
+    best = _assemble(per_page, subject, source_pdf)
+    best_diff = abs(sum(q.max_marks for q in best.questions) - expected)
+    for _ in range(max(0, max_passes - 1)):
+        if best_diff == 0:
             break
+        per_page = _transcribe_pages(client, png_paths, extra, workers)
+        cand = _assemble(per_page, subject, source_pdf)
+        diff = abs(sum(q.max_marks for q in cand.questions) - expected)
+        if diff < best_diff:
+            best, best_diff = cand, diff
     return best

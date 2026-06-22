@@ -117,13 +117,22 @@ The transcript is persisted **before** grading, so grading can be re-run without
 OCR again.
 
 **Marks reconciliation.** Before transcription, `markmap.extract_mark_map` reads the paper's
-stated total off the instructions page. `transcribe_reconciled` then transcribes up to
-`max_transcribe_passes` times, keeping the pass whose detected `max_marks` total is closest to
-that stated total (and stopping on an exact match). The stated total is recorded on the
-transcript and graded paper; the report shows a ✓/⚠ checksum line. The denominator stays the
-*detected* total (the scale the awards are on), so reconciliation improves accuracy by making
-detection converge — it never overrides the denominator (which would let scores exceed 100).
-A persistent mismatch is flagged for review; the marking guide (§7) is the deterministic cure.
+stated total — and per-section budgets — off the instructions page. After transcription the
+detected marks are compared against them:
+
+- **Total checksum** (always): the report shows a ✓/⚠ line; the transcript and graded paper
+  record the stated total.
+- **Per-section diagnostic** (when the paper states section budgets): `section_reconcile`
+  reports each section's stated-vs-detected marks, so a mismatch points at *which* section is
+  mis-read (e.g. "Section C: stated 40, detected 71").
+- **Targeted re-transcription** (opt-in via `max_transcribe_passes > 1`): re-transcribes only
+  the pages of off-budget sections. Measured finding: this does **not** fix systematic VLM
+  mark mis-reads (re-reading reproduces the same error), so it is off by default — the
+  diagnostic is the value, not the auto-correction.
+
+The denominator stays the *detected* total (the scale the awards are on); reconciliation never
+overrides it (which would let scores exceed 100). A persistent mismatch is flagged for review;
+the marking guide (§7) is the deterministic cure for the marks themselves.
 
 ## 4. Data model (stage interfaces)
 

@@ -109,11 +109,20 @@ the report flags it. The committed grades under `out/` are from this run:
 
 The checksum is the key trust signal. **SET reconciles exactly**, so its denominator is the
 real 100. Math and English don't — the vision model mis-reads their per-question marks (Math
-under, English over), so the pipeline re-transcribes (up to `max_transcribe_passes`) and, if it
-still can't match, **flags the paper** rather than pretending. The normalized `/100` keeps the
-score in range, but a flagged denominator is unreliable — the cure is a **marking guide**
-(`--guide`), which supplies the canonical marks. Treat un-reconciled scores as a demonstration;
-LLM-judge grades also vary run-to-run.
+under, English over). For papers with stated **section budgets** (English A/B/C/D), the report
+and CLI also show a **per-section** breakdown, pinpointing where it's off:
+
+```
+Section A: stated 20, detected 36 (+16)
+Section C: stated 40, detected 71 (+31)
+```
+
+Targeted re-transcription of off-budget sections is available (`max_transcribe_passes > 1`)
+but **off by default**: measured, it doesn't fix the VLM's *systematic* mark mis-reads
+(re-reading reproduces them), so it mostly costs time. The diagnostic is the value. The
+normalized `/100` keeps scores in range, but a flagged denominator is unreliable — the real
+cure is a **marking guide** (`--guide`), which supplies the canonical marks. Treat
+un-reconciled scores as a demonstration; LLM-judge grades also vary run-to-run.
 
 ## Performance
 

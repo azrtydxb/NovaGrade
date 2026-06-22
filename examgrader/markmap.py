@@ -4,6 +4,8 @@ NESA papers print their mark budget up front ("Section A (20 marks) ... Total /1
 that once, then check the transcribed per-question marks against it — a mismatch means
 transcription missed or mis-marked questions, and triggers another pass.
 """
+import re
+
 from examgrader.llm_client import image_part, text_part
 from examgrader.schemas import TranscribedPaper
 
@@ -37,6 +39,45 @@ def extract_mark_map(client, png_path: str) -> dict:
 
 def detected_total(paper: TranscribedPaper) -> float:
     return sum(q.max_marks for q in paper.questions)
+
+
+def canonical_section(section: str | None) -> str | None:
+    """Normalize a transcribed section label to a budget key: 'Section A' / 'A' -> 'A'."""
+    if not section:
+        return None
+    s = re.sub(r"section", "", str(section), flags=re.IGNORECASE).strip()
+    return s.split()[0].upper() if s else None
+
+
+def map_sections(mark_map: dict) -> dict:
+    """Section budgets keyed by canonical label, dropping blanks."""
+    out = {}
+    for k, v in (mark_map.get("sections") or {}).items():
+        ck = canonical_section(k)
+        if ck:
+            out[ck] = float(v)
+    return out
+
+
+def section_sums(questions) -> dict:
+    """Detected marks per canonical section ('?' for unlabelled)."""
+    sums: dict[str, float] = {}
+    for q in questions:
+        key = canonical_section(q.section) or "?"
+        sums[key] = sums.get(key, 0.0) + q.max_marks
+    return sums
+
+
+def section_reconcile(mark_map: dict, paper: TranscribedPaper) -> list[dict]:
+    """Per-section expected vs detected, for the sections the paper states a budget for."""
+    budgets = map_sections(mark_map)
+    detected = section_sums(paper.questions)
+    rows = []
+    for sec in sorted(budgets):
+        exp, det = budgets[sec], detected.get(sec, 0.0)
+        rows.append({"section": sec, "expected": exp, "detected": det,
+                     "difference": det - exp, "ok": det == exp})
+    return rows
 
 
 def reconcile(mark_map: dict, paper: TranscribedPaper) -> dict:

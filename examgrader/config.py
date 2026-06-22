@@ -14,7 +14,10 @@ class Settings:
     vlm_concurrency: int = 4
     grader_concurrency: int = 8
     llm_seed: int = 0  # sent to vLLM for more reproducible LLM outputs
-    max_transcribe_passes: int = 2  # re-OCR attempts to match the paper's stated total
+    # re-OCR attempts to match the paper's stated total. Default 1 = diagnostic only:
+    # re-transcription doesn't fix the VLM's *systematic* mark mis-reads (measured), so the
+    # extra passes mostly cost time. Raise to 2+ to opt into targeted re-transcription.
+    max_transcribe_passes: int = 1
 
 
 SETTINGS = Settings()

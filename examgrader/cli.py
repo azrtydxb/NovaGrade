@@ -5,7 +5,7 @@ import sys
 from examgrader.config import SETTINGS
 from examgrader.grader import GuideMarkScheme, LLMJudge, grade_paper, guide_coverage
 from examgrader.llm_client import LLMClient
-from examgrader.markmap import extract_mark_map, reconcile
+from examgrader.markmap import extract_mark_map, reconcile, section_reconcile
 from examgrader.pdf_to_images import content_pages
 from examgrader.report import write_report
 from examgrader.schemas import GradedPaper, TranscribedPaper
@@ -50,6 +50,10 @@ def grade_pdf(pdf_path=None, subject=None, *, out_dir=None, guide_path=None,
             print(f"[reconcile] stated total {rec['expected_total']:g} but detected "
                   f"{rec['detected_total']:g} (Δ {rec['difference']:+g}) — marks may be "
                   "mis-read on some questions", file=sys.stderr)
+        for row in section_reconcile(mark_map, transcript):
+            if not row["ok"]:
+                print(f"[reconcile]   Section {row['section']}: stated {row['expected']:g}, "
+                      f"detected {row['detected']:g} (Δ {row['difference']:+g})", file=sys.stderr)
         with open(os.path.join(out_dir, f"{stem}.transcript.json"), "w") as f:
             f.write(transcript.model_dump_json(indent=2))
 

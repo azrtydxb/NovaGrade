@@ -60,3 +60,76 @@ def test_transcribe_reconciled_keeps_closest_to_total(tmp_path):
         Seq(), [str(p)], "S", "s.pdf", mark_map={"total": 10.0}, max_passes=3, max_workers=1
     )
     assert sum(q.max_marks for q in paper.questions) == 10.0
+
+
+def test_canonical_section():
+    assert markmap.canonical_section("Section A") == "A"
+    assert markmap.canonical_section("A") == "A"
+    assert markmap.canonical_section("section c") == "C"
+    assert markmap.canonical_section(None) is None
+    assert markmap.canonical_section("") is None
+
+
+def test_section_sums_and_reconcile():
+    paper = TranscribedPaper(subject="E", source_pdf="e.pdf", questions=[
+        _q("1", 10, section="Section A"), _q("2", 12, section="A"), _q("3", 25, section="B"),
+    ])
+    assert markmap.section_sums(paper.questions) == {"A": 22.0, "B": 25.0}
+    rows = markmap.section_reconcile({"sections": {"A": 20, "B": 25}}, paper)
+    by = {r["section"]: r for r in rows}
+    assert by["A"]["detected"] == 22.0 and by["A"]["ok"] is False and by["A"]["difference"] == 2.0
+    assert by["B"]["ok"] is True
+
+
+def test_transcribe_reconciled_retranscribes_only_off_section_pages(tmp_path):
+    # page 0 = Section A (off: 5 vs budget 20), page 1 = Section B (ok: 25)
+    p0 = tmp_path / "page-01.png"; p0.write_bytes(b"\x89PNG\r\n")
+    p1 = tmp_path / "page-02.png"; p1.write_bytes(b"\x89PNG\r\n")
+
+    def A(marks, no="a"):
+        return {"section": "A", "question_no": no, "max_marks": marks, "question_text": "q",
+                "student_answer": "x", "read_confidence": 0.9}
+    def B(marks, no="b"):
+        return {"section": "B", "question_no": no, "max_marks": marks, "question_text": "q",
+                "student_answer": "x", "read_confidence": 0.9}
+
+    calls = {"A_pages": 0}
+
+    class ByPage:
+        # returns Section-A content for page 0, Section-B for page 1; on the SECOND read of
+        # page 0 it finds the full 20 marks (simulating recovery)
+        def chat_json(self, content, **k):
+            text = content[0]["text"]
+            url = content[1]["image_url"]["url"]
+            # distinguish page by its bytes
+            import base64
+            raw = base64.b64decode(url.split(",", 1)[1])
+            if raw.endswith(b"\r\n"):  # both share bytes; use a counter on focus instead
+                pass
+            # page identity via which marks we return: track by a side flag in the prompt
+            if "Section A" in text and "Focus" in text:
+                calls["A_pages"] += 1
+                return [A(20)]            # recovered on the targeted re-read
+            # first pass: infer page by call order
+            return None
+
+    # simpler deterministic fake keyed by image bytes
+    p0.write_bytes(b"\x89PNGAAA"); p1.write_bytes(b"\x89PNGBBB")
+
+    class Fake:
+        def chat_json(self, content, **k):
+            import base64
+            raw = base64.b64decode(content[1]["image_url"]["url"].split(",", 1)[1])
+            page = "A" if b"AAA" in raw else "B"
+            focus = "Focus on these sections" in content[0]["text"]
+            if page == "A":
+                return [A(20)] if focus else [A(5)]   # under-detected first, recovered on focus
+            return [B(25)]
+
+    paper = transcriber.transcribe_reconciled(
+        Fake(), [str(p0), str(p1)], "E", "e.pdf",
+        mark_map={"total": 45, "sections": {"A": 20, "B": 25}}, max_passes=2, max_workers=1,
+    )
+    sums = markmap.section_sums(paper.questions)
+    assert sums["A"] == 20.0   # off section A was re-transcribed and recovered
+    assert sums["B"] == 25.0   # B was fine, untouched
