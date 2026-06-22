@@ -11,6 +11,8 @@ class Settings:
     request_timeout: float = 180.0
     max_retries: int = 3
     out_dir: str = "out"
+    vlm_concurrency: int = 4
+    grader_concurrency: int = 8
 
 
 SETTINGS = Settings()

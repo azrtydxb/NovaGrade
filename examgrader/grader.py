@@ -1,6 +1,8 @@
 from typing import Protocol
 
+from examgrader.config import SETTINGS
 from examgrader.llm_client import text_part
+from examgrader.parallel import map_ordered
 from examgrader.schemas import (
     GradedPaper, GradedQuestion, TranscribedPaper, TranscribedQuestion,
 )
@@ -53,8 +55,12 @@ class LLMJudge:
             )
 
 
-def grade_paper(scheme: MarkScheme, paper: TranscribedPaper, max_total: float = 100.0) -> GradedPaper:
-    graded = [scheme.grade_question(q) for q in paper.questions]
+def grade_paper(
+    scheme: MarkScheme, paper: TranscribedPaper, max_total: float = 100.0,
+    max_workers: int | None = None,
+) -> GradedPaper:
+    workers = SETTINGS.grader_concurrency if max_workers is None else max_workers
+    graded = map_ordered(scheme.grade_question, paper.questions, workers)
     section_totals: dict[str, float] = {}
     for g in graded:
         key = g.section or "?"

@@ -45,7 +45,34 @@ def test_grade_paper_totals(fake_client_factory):
         _q("1b", 1, "True", section="A"),
         _q("3a", 2, "Circumference", section="B"),
     ])
-    gp = grader.grade_paper(grader.LLMJudge(client), paper)
+    # max_workers=1 keeps the order-based queue fake deterministic
+    gp = grader.grade_paper(grader.LLMJudge(client), paper, max_workers=1)
     assert gp.total == 3.0
     assert gp.section_totals == {"A": 1.0, "B": 2.0}
     assert gp.max_total == 100.0
+
+
+def test_grade_paper_concurrent_preserves_order_and_totals():
+    # Each question is graded concurrently; awarded marks must map to the right
+    # question regardless of completion order.
+    import time
+
+    class ByQuestion:
+        # awards marks equal to the digit in the student's answer; question "qN"
+        # answered "N" -> N marks. Earlier questions sleep longer so completion
+        # order is reversed from input order.
+        def chat_json(self, content, **kw):
+            text = content[0]["text"]
+            n = int(text.split("Student answer:")[1].strip().strip("'\""))
+            time.sleep(0.02 * (5 - n))
+            return {"awarded_marks": n, "justification": f"got {n}", "grade_confidence": 1.0}
+
+    paper = TranscribedPaper(subject="Math", source_pdf="m.pdf", questions=[
+        _q("q1", 5, "1", section="A"),
+        _q("q2", 5, "2", section="A"),
+        _q("q3", 5, "3", section="B"),
+    ])
+    gp = grader.grade_paper(grader.LLMJudge(ByQuestion()), paper, max_workers=4)
+    assert [g.awarded_marks for g in gp.questions] == [1.0, 2.0, 3.0]
+    assert gp.section_totals == {"A": 3.0, "B": 3.0}
+    assert gp.total == 6.0

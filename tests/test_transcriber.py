@@ -25,8 +25,38 @@ def test_transcribe_paper_skips_failing_page(fake_client_factory, golden_transcr
                 raise RuntimeError("vlm down")
             return golden_transcript_dict["questions"]
 
-    tp = transcriber.transcribe_paper(Flaky(), [str(p1), str(p2)], "Math", "Math paper.pdf")
+    # max_workers=1 keeps the order-sensitive Flaky counter deterministic
+    tp = transcriber.transcribe_paper(
+        Flaky(), [str(p1), str(p2)], "Math", "Math paper.pdf", max_workers=1
+    )
     assert len(tp.questions) == 4  # page 1 skipped, page 2 parsed
+
+
+def test_transcribe_paper_concurrent_preserves_page_order(tmp_path):
+    # Pages transcribed concurrently; result order must follow input page order
+    # regardless of which page's call finishes first.
+    import base64
+    import time
+
+    pages = []
+    for i in (0, 1, 2):
+        p = tmp_path / f"page-0{i}.png"
+        p.write_bytes(b"\x89PNG\r\n" + str(i).encode())  # distinct bytes per page
+        pages.append(str(p))
+
+    class ByImage:
+        # Decodes the page index from the image bytes and tags its question with it.
+        # Page 0 sleeps longest, so completion order is reversed from input order —
+        # proving map_ordered restores input order.
+        def chat_json(self, content, **kw):
+            raw = base64.b64decode(content[1]["image_url"]["url"].split(",", 1)[1])
+            idx = int(raw.replace(b"\x89PNG\r\n", b"").decode())
+            time.sleep(0.05 * (3 - idx))
+            return [{"question_no": f"q{idx}", "max_marks": 1, "question_text": "x",
+                     "student_answer": str(idx), "read_confidence": 0.9}]
+
+    tp = transcriber.transcribe_paper(ByImage(), pages, "Math", "Math paper.pdf", max_workers=3)
+    assert [q.question_no for q in tp.questions] == ["q0", "q1", "q2"]
 
 
 def test_transcribe_paper_skips_bad_question_keeps_good(fake_client_factory, tmp_path):
