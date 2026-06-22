@@ -40,6 +40,16 @@ class MarkScheme(Protocol):
     def grade_question(self, q: TranscribedQuestion) -> GradedQuestion: ...
 
 
+def guide_coverage(guide: dict, paper: TranscribedPaper) -> tuple[list[str], list[str]]:
+    """Return (questions_not_in_guide, guide_entries_not_in_paper) so coverage gaps are
+    visible instead of silently falling back / being ignored."""
+    paper_nos = {q.question_no for q in paper.questions}
+    guide_nos = set(guide)
+    uncovered = [q.question_no for q in paper.questions if q.question_no not in guide_nos]
+    unused = sorted(guide_nos - paper_nos)
+    return uncovered, unused
+
+
 def _award_from_llm(client, prompt: str, q: TranscribedQuestion, max_marks: float,
                     flags: list[str]) -> GradedQuestion:
     """Run one grading LLM call and map the reply to a GradedQuestion, isolating failures."""

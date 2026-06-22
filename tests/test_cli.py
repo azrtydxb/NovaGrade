@@ -53,3 +53,13 @@ def test_grade_pdf_from_transcript_with_guide_is_deterministic(tmp_path):
     assert r1.total == 5.0 and r1.max_total == 10.0      # 1a right (5), 1b wrong (0)
     assert r1.score_100 == 50.0
     assert (r1.total, r1.max_total, r1.score_100) == (r2.total, r2.max_total, r2.score_100)
+
+
+def test_grade_pdf_raises_on_empty_transcript(monkeypatch, fake_client_factory, tmp_path):
+    page = str(tmp_path / "page-01.png"); open(page, "wb").write(b"\x89PNG\r\n")
+    monkeypatch.setattr(cli, "content_pages", lambda *a, **k: [page])
+    vlm = fake_client_factory([[]])      # vision model returns no questions
+    grd = fake_client_factory([])
+    import pytest
+    with pytest.raises(RuntimeError, match="no questions transcribed"):
+        cli.grade_pdf("x.pdf", "X", out_dir=str(tmp_path), vlm_client=vlm, grader_client=grd)

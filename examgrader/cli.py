@@ -3,7 +3,7 @@ import os
 import sys
 
 from examgrader.config import SETTINGS
-from examgrader.grader import GuideMarkScheme, LLMJudge, grade_paper
+from examgrader.grader import GuideMarkScheme, LLMJudge, grade_paper, guide_coverage
 from examgrader.llm_client import LLMClient
 from examgrader.pdf_to_images import content_pages
 from examgrader.report import write_report
@@ -40,6 +40,14 @@ def grade_pdf(pdf_path=None, subject=None, *, out_dir=None, guide_path=None,
         with open(os.path.join(out_dir, f"{stem}.transcript.json"), "w") as f:
             f.write(transcript.model_dump_json(indent=2))
 
+    # Fail loudly instead of writing a meaningless 0/0 report: an empty transcript means
+    # the vision model returned nothing (e.g. unreachable endpoint or a non-exam PDF).
+    if not transcript.questions:
+        raise RuntimeError(
+            f"no questions transcribed from {pdf_path or transcript_path!r} — "
+            "is the vision model reachable and the PDF a real exam?"
+        )
+
     # With a marking guide: deterministic objective grading; guide-matched questions carry
     # the guide's authoritative max_marks, so max_total (derived in grade_paper) reflects the
     # true paper total for a complete guide and stays correct for a partial one.
@@ -48,6 +56,14 @@ def grade_pdf(pdf_path=None, subject=None, *, out_dir=None, guide_path=None,
         scheme = GuideMarkScheme.from_file(
             guide_path, fallback=LLMJudge(grader_client), client=grader_client
         )
+        uncovered, unused = guide_coverage(scheme.guide, transcript)
+        if uncovered:
+            print(f"[guide] {len(uncovered)} question(s) not in the guide → LLM-judge "
+                  f"fallback: {', '.join(uncovered[:10])}{'…' if len(uncovered) > 10 else ''}",
+                  file=sys.stderr)
+        if unused:
+            print(f"[guide] {len(unused)} guide entr(ies) not seen in the paper: "
+                  f"{', '.join(unused[:10])}{'…' if len(unused) > 10 else ''}", file=sys.stderr)
     else:
         scheme = LLMJudge(grader_client)
     paper = grade_paper(scheme, transcript)
