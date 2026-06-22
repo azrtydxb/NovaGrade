@@ -14,6 +14,7 @@ class TranscribedPaper(BaseModel):
     subject: str
     source_pdf: str
     questions: list[TranscribedQuestion]
+    expected_total: float | None = None  # the paper's stated total marks, if read
 
 
 class GradedQuestion(BaseModel):
@@ -35,3 +36,4 @@ class GradedPaper(BaseModel):
     total: float
     max_total: float
     score_100: float = 0.0  # total normalized to a 0–100 scale
+    expected_total: float | None = None  # the paper's stated total, for reconciliation

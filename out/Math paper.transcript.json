@@ -87,7 +87,7 @@
       "question_no": "4",
       "max_marks": 2.0,
       "question_text": "A meeting started at 10:40 a.m. and ended at 1:30 p.m. The duration of this meeting is ... h. ... min.",
-      "student_answer": "2. 50min.",
+      "student_answer": "2 h. 50 min.",
       "read_confidence": 0.98
     },
     {
@@ -95,7 +95,7 @@
       "question_no": "5a",
       "max_marks": 2.0,
       "question_text": "What are the place values of 2 and 7 in the number 3,297,354?",
-      "student_answer": "2 = hundred thousands\n7 = thousands",
+      "student_answer": "2 = hundreds thousands\n7 = thousands",
       "read_confidence": 0.97
     },
     {
@@ -134,8 +134,8 @@
       "section": null,
       "question_no": "7",
       "max_marks": 2.0,
-      "question_text": "By using the following digits: 5; 2; 9; 4; 0; Write the biggest and the smallest whole number formed by all five digits.",
-      "student_answer": "Biggest: 95420\nSmallest: 02459",
+      "question_text": "By using the following digits: 5; 2; 9; 4; 0. Write the biggest and the smallest whole number formed by all five digits.",
+      "student_answer": "Biggest: 95420\nSmallest: 20459",
       "read_confidence": 0.95
     },
     {
@@ -184,7 +184,7 @@
       "max_marks": 1.0,
       "question_text": "Round off 654,497 to the nearest hundreds.",
       "student_answer": "C: 654,500",
-      "read_confidence": 0.95
+      "read_confidence": 0.98
     },
     {
       "section": null,
@@ -206,7 +206,7 @@
       "section": null,
       "question_no": "19",
       "max_marks": 2.0,
-      "question_text": "Change 15:54hr from 24-hour format to 12-hour format. Write the best answer.",
+      "question_text": "Change 15:54 hr from 24-hour format to 12-hour format. Write the best answer.",
       "student_answer": "B: 3:54 p.m",
       "read_confidence": 0.95
     },
@@ -230,7 +230,7 @@
       "section": null,
       "question_no": "31a",
       "max_marks": 2.0,
-      "question_text": "The sum of interior angles of a regular polygon is 1440°. a) Find the number of sides of this polygon.",
+      "question_text": "The sum of interior angles of a regular polygon is 1440°. Find the number of sides of this polygon.",
       "student_answer": "10",
       "read_confidence": 0.98
     },
@@ -238,7 +238,7 @@
       "section": null,
       "question_no": "31b",
       "max_marks": 1.0,
-      "question_text": "b) Name the polygon.",
+      "question_text": "Name the polygon.",
       "student_answer": "decagon",
       "read_confidence": 0.97
     },
@@ -246,16 +246,16 @@
       "section": null,
       "question_no": "31c",
       "max_marks": 1.0,
-      "question_text": "c) Find the size of the exterior angle of this regular polygon.",
+      "question_text": "Find the size of the exterior angle of this regular polygon.",
       "student_answer": "36°",
-      "read_confidence": 0.98
+      "read_confidence": 0.96
     },
     {
       "section": null,
       "question_no": "34a",
       "max_marks": 2.0,
       "question_text": "Order the family needs according to priority.",
-      "student_answer": "buying food - buying clothes - paying school fees - painting house",
+      "student_answer": "a). buying food - buying clothes - paying school fees - painting house",
       "read_confidence": 0.95
     },
     {
@@ -283,15 +283,15 @@
       "read_confidence": 0.96
     },
     {
-      "section": "35",
+      "section": null,
       "question_no": "35a",
-      "max_marks": 3.0,
+      "max_marks": 1.0,
       "question_text": "Complete this frequency table.",
-      "student_answer": "95, 2, 190\n90, 3, 270\n85, 3, 680\n80, 8, 80\n75, 1, 450\n70, 6, 210\n60, 2, 120\nΣf = 25\nΣfx = 2000",
+      "student_answer": "95, 2, 190; 90, 3, 270; 85, 3, 680; 80, 8, 80; 75, 1, 450; 70, 6, 210; 60, 2, 120; Σf = 25; Σfx = 2000",
       "read_confidence": 0.95
     },
     {
-      "section": "35",
+      "section": null,
       "question_no": "35b",
       "max_marks": 1.0,
       "question_text": "Modal mark is",
@@ -299,12 +299,13 @@
       "read_confidence": 0.98
     },
     {
-      "section": "35",
+      "section": null,
       "question_no": "35c",
       "max_marks": 1.0,
       "question_text": "The mean is",
       "student_answer": "2000/25 = 80",
       "read_confidence": 0.97
     }
-  ]
+  ],
+  "expected_total": 100.0
 }

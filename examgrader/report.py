@@ -10,12 +10,29 @@ def to_json(paper: GradedPaper) -> str:
     return paper.model_dump_json(indent=2)
 
 
+def _reconciliation_line(paper: GradedPaper) -> str:
+    """A one-line marks checksum against the paper's stated total."""
+    exp = paper.expected_total
+    if exp is None:
+        return "_Marks reconciliation: paper's stated total not read._"
+    if paper.max_total == exp:
+        return f"✓ Marks reconcile with the paper's stated total ({exp:g})."
+    return (
+        f"⚠ Marks reconciliation: stated total **{exp:g}** but detected "
+        f"**{paper.max_total:g}** (Δ {paper.max_total - exp:+g}) — some questions' marks were "
+        "mis-read; the grade is normalized but the raw denominator is unreliable. "
+        "Use a marking guide (`--guide`) for the authoritative marks."
+    )
+
+
 def to_markdown(paper: GradedPaper) -> str:
     pct = round(100 * paper.total / paper.max_total, 1) if paper.max_total else 0.0
     lines = [
         f"# {paper.subject} — graded ({paper.source_pdf})",
         "",
         f"**Grade: {pct:g} / 100**  ·  raw {paper.total:g}/{paper.max_total:g}",
+        "",
+        _reconciliation_line(paper),
         "",
         "| Q | Section | Marks | Conf | Flags | Justification |",
         "|---|---------|-------|------|-------|---------------|",

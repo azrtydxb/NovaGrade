@@ -65,3 +65,14 @@ def test_write_report_creates_files(tmp_path):
     assert m.endswith("Math paper.report.md")
     assert json.loads(open(j).read())["subject"] == "Math"
     assert "Math" in open(m).read()
+
+
+def test_reconciliation_line_states():
+    from examgrader.report import _reconciliation_line
+    base = dict(subject="S", source_pdf="s.pdf", questions=[], section_totals={}, total=0.0)
+    ok = GradedPaper(**base, max_total=100.0, expected_total=100.0)
+    bad = GradedPaper(**base, max_total=162.0, expected_total=100.0)
+    none = GradedPaper(**base, max_total=50.0)
+    assert "✓" in _reconciliation_line(ok)
+    assert "⚠" in _reconciliation_line(bad) and "162" in _reconciliation_line(bad)
+    assert "not read" in _reconciliation_line(none)

@@ -7,132 +7,116 @@
       "question_no": "1a",
       "max_marks": 2.0,
       "question_text": "What is the main idea of the passage?",
-      "student_answer": "The main idea is that the boy is excited about his new school.",
-      "read_confidence": 0.9
+      "student_answer": "The main idea is that the boy is excited about the school trip.",
+      "read_confidence": 0.95
     },
     {
       "section": "A",
       "question_no": "1b",
       "max_marks": 2.0,
-      "question_text": "What does the boy do on his first day of school?",
-      "student_answer": "He meets his teacher and classmates.",
-      "read_confidence": 0.9
+      "question_text": "What does the word 'excited' mean in the passage?",
+      "student_answer": "Excited means very happy and eager.",
+      "read_confidence": 0.98
     },
     {
       "section": "A",
       "question_no": "1c",
       "max_marks": 2.0,
-      "question_text": "Why is the boy excited?",
-      "student_answer": "He is excited because he gets to see his new school and make new friends.",
-      "read_confidence": 0.9
+      "question_text": "Why did the boy feel excited?",
+      "student_answer": "He felt excited because he was going on a school trip.",
+      "read_confidence": 0.97
     },
     {
       "section": "A",
       "question_no": "1d",
       "max_marks": 2.0,
-      "question_text": "What does the boy do after school?",
-      "student_answer": "He goes home and tells his parents about his day.",
-      "read_confidence": 0.9
+      "question_text": "What did the boy do before the trip?",
+      "student_answer": "He packed his bag and said goodbye to his family.",
+      "read_confidence": 0.96
     },
     {
       "section": "A",
       "question_no": "1e",
       "max_marks": 2.0,
-      "question_text": "What is the boy's favorite part of the day?",
-      "student_answer": "His favorite part is playing with his new friends during recess.",
-      "read_confidence": 0.9
+      "question_text": "What did the boy see on the trip?",
+      "student_answer": "He saw a beautiful lake and a forest.",
+      "read_confidence": 0.95
     },
     {
       "section": "B",
       "question_no": "2a",
-      "max_marks": 2.0,
-      "question_text": "What is the opposite of 'tall'?",
-      "student_answer": "short",
-      "read_confidence": 0.95
+      "max_marks": 5.0,
+      "question_text": "Choose the correct word to complete the sentence: 'The cat is ___ the table.'",
+      "student_answer": "on",
+      "read_confidence": 0.99
     },
     {
       "section": "B",
       "question_no": "2b",
-      "max_marks": 2.0,
-      "question_text": "What is the opposite of 'happy'?",
-      "student_answer": "sad",
-      "read_confidence": 0.95
+      "max_marks": 5.0,
+      "question_text": "Choose the correct word to complete the sentence: 'She is ___ a book.'",
+      "student_answer": "reading",
+      "read_confidence": 0.98
     },
     {
       "section": "B",
       "question_no": "2c",
-      "max_marks": 2.0,
-      "question_text": "What is the opposite of 'hot'?",
-      "student_answer": "cold",
-      "read_confidence": 0.95
+      "max_marks": 5.0,
+      "question_text": "Choose the correct word to complete the sentence: 'They are ___ to the park.'",
+      "student_answer": "going",
+      "read_confidence": 0.97
     },
     {
       "section": "B",
       "question_no": "2d",
-      "max_marks": 2.0,
-      "question_text": "What is the opposite of 'fast'?",
-      "student_answer": "slow",
-      "read_confidence": 0.95
+      "max_marks": 5.0,
+      "question_text": "Choose the correct word to complete the sentence: 'He is ___ a ball.'",
+      "student_answer": "kicking",
+      "read_confidence": 0.96
     },
     {
       "section": "B",
       "question_no": "2e",
-      "max_marks": 2.0,
-      "question_text": "What is the opposite of 'big'?",
-      "student_answer": "small",
-      "read_confidence": 0.95
+      "max_marks": 5.0,
+      "question_text": "Choose the correct word to complete the sentence: 'We are ___ to the beach.'",
+      "student_answer": "going",
+      "read_confidence": 0.98
     },
     {
       "section": "C",
       "question_no": "3a",
-      "max_marks": 2.0,
-      "question_text": "Write a sentence using the word 'beautiful'.",
-      "student_answer": "The garden is beautiful with colorful flowers.",
-      "read_confidence": 0.9
+      "max_marks": 10.0,
+      "question_text": "Write a short paragraph about your favorite holiday.",
+      "student_answer": "My favorite holiday is Christmas. I love it because I get to spend time with my family and receive presents. We decorate the tree and have a big dinner. I also enjoy singing carols and watching the snow fall. It is a very special time of the year.",
+      "read_confidence": 0.94
     },
     {
       "section": "C",
       "question_no": "3b",
-      "max_marks": 2.0,
-      "question_text": "Write a sentence using the word 'quick'.",
-      "student_answer": "The rabbit ran quick across the field.",
-      "read_confidence": 0.9
+      "max_marks": 10.0,
+      "question_text": "Write a short paragraph about your favorite animal.",
+      "student_answer": "My favorite animal is the dog. I love dogs because they are loyal and friendly. They are great companions and always happy to see you. I have a golden retriever named Max who is very playful and loves to go for walks. Dogs are wonderful pets.",
+      "read_confidence": 0.95
     },
     {
       "section": "C",
       "question_no": "3c",
-      "max_marks": 2.0,
-      "question_text": "Write a sentence using the word 'loud'.",
-      "student_answer": "The music was loud and everyone danced.",
-      "read_confidence": 0.9
-    },
-    {
-      "section": "C",
-      "question_no": "3d",
-      "max_marks": 2.0,
-      "question_text": "Write a sentence using the word 'clean'.",
-      "student_answer": "The classroom is clean and tidy.",
-      "read_confidence": 0.9
-    },
-    {
-      "section": "C",
-      "question_no": "3e",
-      "max_marks": 2.0,
-      "question_text": "Write a sentence using the word 'kind'.",
-      "student_answer": "My teacher is kind and always helps me.",
-      "read_confidence": 0.9
+      "max_marks": 10.0,
+      "question_text": "Write a short paragraph about your favorite food.",
+      "student_answer": "My favorite food is pizza. I love pizza because it is delicious and comes in many flavors. I enjoy eating pepperoni and cheese pizza. I also like to add vegetables like mushrooms and onions. Pizza is a fun food to eat with friends and family.",
+      "read_confidence": 0.93
     },
     {
       "section": "D",
-      "question_no": "4",
+      "question_no": "4a",
       "max_marks": 15.0,
-      "question_text": "Write a short story about a day at the park.",
-      "student_answer": "It was a sunny day and I went to the park with my family. We played on the swings and slid down the slide. I fed the ducks in the pond and they quacked loudly. We had a picnic and ate sandwiches and fruit. I felt very happy and tired when we went home. I can't wait to go back to the park again.",
-      "read_confidence": 0.85
+      "question_text": "Write a story about a day at the beach.",
+      "student_answer": "It was a sunny day and I went to the beach with my family. We built a sandcastle and played in the waves. I found a seashell and gave it to my mom. We had a picnic and ate sandwiches and fruit. I swam in the ocean and saw fish. It was a fun day and I will never forget it.",
+      "read_confidence": 0.92
     },
     {
       "section": "A",
-      "question_no": "1a",
+      "question_no": "1a#2",
       "max_marks": 5.0,
       "question_text": "Name the four major food groups.",
       "student_answer": "",
@@ -140,7 +124,7 @@
     },
     {
       "section": "A",
-      "question_no": "1b",
+      "question_no": "1b#2",
       "max_marks": 5.0,
       "question_text": "What are carbohydrates?",
       "student_answer": "",
@@ -148,7 +132,7 @@
     },
     {
       "section": "A",
-      "question_no": "1c",
+      "question_no": "1c#2",
       "max_marks": 5.0,
       "question_text": "What are proteins?",
       "student_answer": "",
@@ -156,14 +140,14 @@
     },
     {
       "section": "A",
-      "question_no": "1d",
+      "question_no": "1d#2",
       "max_marks": 5.0,
       "question_text": "What are fats?",
       "student_answer": "",
       "read_confidence": 0.0
     },
     {
-      "section": null,
+      "section": "A",
       "question_no": "1i",
       "max_marks": 1.0,
       "question_text": "What do we need food for?",
@@ -171,7 +155,7 @@
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "A",
       "question_no": "1ii",
       "max_marks": 1.0,
       "question_text": "How many major groups of food that are mentioned in the passage?",
@@ -179,7 +163,7 @@
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "A",
       "question_no": "1iii",
       "max_marks": 1.0,
       "question_text": "Which of the following is NOT one of the food groups mentioned in the passage?",
@@ -187,7 +171,7 @@
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "A",
       "question_no": "1iv",
       "max_marks": 1.0,
       "question_text": "What is the primary function of carbohydrates in our bodies?",
@@ -195,7 +179,7 @@
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "A",
       "question_no": "1v",
       "max_marks": 1.0,
       "question_text": "Which of these foods is an example of carbohydrate?",
@@ -203,7 +187,7 @@
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "A",
       "question_no": "1vi",
       "max_marks": 1.0,
       "question_text": "Proteins are mainly responsible for:",
@@ -211,57 +195,57 @@
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "B",
       "question_no": "vii",
-      "max_marks": 1.0,
+      "max_marks": 2.0,
       "question_text": "Which of the following foods is rich in protein?",
       "student_answer": "C",
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "B",
       "question_no": "viii",
-      "max_marks": 1.0,
+      "max_marks": 2.0,
       "question_text": "Fats help our bodies by:",
       "student_answer": "B",
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "B",
       "question_no": "ix",
-      "max_marks": 1.0,
+      "max_marks": 2.0,
       "question_text": "Vitamins assist in:",
       "student_answer": "C",
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "B",
       "question_no": "x",
-      "max_marks": 1.0,
+      "max_marks": 2.0,
       "question_text": "Fruits and vegetables are primary sources of:",
       "student_answer": "D",
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "B",
       "question_no": "xi",
-      "max_marks": 1.0,
+      "max_marks": 2.0,
       "question_text": "Which of the following is NOT a role of water in our bodies?",
       "student_answer": "D",
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "B",
       "question_no": "xii",
-      "max_marks": 1.0,
+      "max_marks": 2.0,
       "question_text": "Which of the following is a way to take water into our bodies?",
       "student_answer": "A",
       "read_confidence": 0.95
     },
     {
-      "section": null,
+      "section": "B",
       "question_no": "xiii",
-      "max_marks": 1.0,
+      "max_marks": 2.0,
       "question_text": "A balanced diet means:",
       "student_answer": "B",
       "read_confidence": 0.95
@@ -292,65 +276,97 @@
     },
     {
       "section": null,
-      "question_no": "2a",
+      "question_no": "2a#2",
       "max_marks": 2.0,
       "question_text": "What are the two functions of vitamins?",
-      "student_answer": "To boost immunity and strengthen bones. To heal wounds and improve eyesight.",
+      "student_answer": "To boost immunity and strengthen bones to heal wounds and improve eyesight",
       "read_confidence": 0.9
     },
     {
       "section": null,
-      "question_no": "2b",
+      "question_no": "2b#2",
       "max_marks": 2.0,
       "question_text": "How can we get water into our bodies?",
-      "student_answer": "To drink water. To eat fruits.",
-      "read_confidence": 0.95
+      "student_answer": "To drink water To eat fruits",
+      "read_confidence": 0.9
     },
     {
       "section": "B",
-      "question_no": "3",
-      "max_marks": 5.0,
-      "question_text": "Complete the story below by picking the correct words from the box to fill the blank spaces.",
-      "student_answer": "bus, car, bicycle, run, boat",
-      "read_confidence": 0.95
-    },
-    {
-      "section": "B",
-      "question_no": "4a",
+      "question_no": "3a#2",
       "max_marks": 1.0,
-      "question_text": "My father is a ... (farmer)",
+      "question_text": "I travel to school in different ways. On Mondays, I take a (a) ...",
+      "student_answer": "bus",
+      "read_confidence": 0.95
+    },
+    {
+      "section": "B",
+      "question_no": "3b#2",
+      "max_marks": 1.0,
+      "question_text": "When it rains, my dad drives his (b) ...",
+      "student_answer": "car",
+      "read_confidence": 0.95
+    },
+    {
+      "section": "B",
+      "question_no": "3c#2",
+      "max_marks": 1.0,
+      "question_text": "I ride my (c) ... with friends on sunny days.",
+      "student_answer": "bicycle",
+      "read_confidence": 0.95
+    },
+    {
+      "section": "B",
+      "question_no": "3d",
+      "max_marks": 1.0,
+      "question_text": "I (d) ... fast!",
+      "student_answer": "run",
+      "read_confidence": 0.95
+    },
+    {
+      "section": "B",
+      "question_no": "3e",
+      "max_marks": 1.0,
+      "question_text": "My sister crosses the river in a (e) ... to go to the market.",
+      "student_answer": "boat",
+      "read_confidence": 0.95
+    },
+    {
+      "section": "B",
+      "question_no": "4a#2",
+      "max_marks": 1.0,
+      "question_text": "My father is a ... but he also rears animals. (farm)",
       "student_answer": "farmer",
-      "read_confidence": 0.98
+      "read_confidence": 0.95
     },
     {
       "section": "B",
       "question_no": "4b",
       "max_marks": 1.0,
-      "question_text": "Our school has many... (teacher) who are very kind.",
+      "question_text": "Our school has many ... who are very kind. (teach)",
       "student_answer": "teacher",
-      "read_confidence": 0.97
+      "read_confidence": 0.95
     },
     {
       "section": "B",
       "question_no": "4c",
       "max_marks": 1.0,
-      "question_text": "I shall be a wonderful... (read) when I practice reading more.",
+      "question_text": "I shall be a wonderful ... when I practice reading more. (read)",
       "student_answer": "reader",
-      "read_confidence": 0.96
+      "read_confidence": 0.95
     },
     {
       "section": "B",
       "question_no": "4d",
       "max_marks": 1.0,
-      "question_text": "My mother likes cooking. She is a nice... (cook).",
+      "question_text": "My mother likes cooking. She is a nice ... (cook).",
       "student_answer": "cook",
-      "read_confidence": 0.98
+      "read_confidence": 0.95
     },
     {
       "section": "B",
       "question_no": "4e",
       "max_marks": 1.0,
-      "question_text": "Cyamamare owns a large business. He is a... (trade) in town.",
+      "question_text": "Cyamamare owns a large business. He is a ... in town. (trade)",
       "student_answer": "trader",
       "read_confidence": 0.95
     },
@@ -360,7 +376,7 @@
       "max_marks": 2.0,
       "question_text": "What does 'weather' mean?",
       "student_answer": "B",
-      "read_confidence": 0.99
+      "read_confidence": 0.98
     },
     {
       "section": "B",
@@ -368,7 +384,7 @@
       "max_marks": 2.0,
       "question_text": "What does 'temperature' tell us?",
       "student_answer": "B",
-      "read_confidence": 0.99
+      "read_confidence": 0.98
     },
     {
       "section": "C",
@@ -492,49 +508,81 @@
     },
     {
       "section": null,
-      "question_no": "11",
-      "max_marks": 5.0,
-      "question_text": "Complete the paragraph below by using the following words: rich, small, beautiful, Africa, hard.",
-      "student_answer": "small, Africa, beautiful, hard, rich",
+      "question_no": "11a",
+      "max_marks": 1.0,
+      "question_text": "Rwanda is a (a) ... country located in East (b) ... It is known for its (c) ... landscapes and stunning hills. The people of Rwanda work (d) ... to improve their lives and communities. The country has a (e) ... culture and it is also rich in traditions and history.",
+      "student_answer": "small",
+      "read_confidence": 0.95
+    },
+    {
+      "section": null,
+      "question_no": "11b",
+      "max_marks": 1.0,
+      "question_text": "Rwanda is a (a) ... country located in East (b) ... It is known for its (c) ... landscapes and stunning hills. The people of Rwanda work (d) ... to improve their lives and communities. The country has a (e) ... culture and it is also rich in traditions and history.",
+      "student_answer": "Africa",
+      "read_confidence": 0.98
+    },
+    {
+      "section": null,
+      "question_no": "11c",
+      "max_marks": 1.0,
+      "question_text": "Rwanda is a (a) ... country located in East (b) ... It is known for its (c) ... landscapes and stunning hills. The people of Rwanda work (d) ... to improve their lives and communities. The country has a (e) ... culture and it is also rich in traditions and history.",
+      "student_answer": "beautiful",
+      "read_confidence": 0.97
+    },
+    {
+      "section": null,
+      "question_no": "11d",
+      "max_marks": 1.0,
+      "question_text": "Rwanda is a (a) ... country located in East (b) ... It is known for its (c) ... landscapes and stunning hills. The people of Rwanda work (d) ... to improve their lives and communities. The country has a (e) ... culture and it is also rich in traditions and history.",
+      "student_answer": "hard",
+      "read_confidence": 0.96
+    },
+    {
+      "section": null,
+      "question_no": "11e",
+      "max_marks": 1.0,
+      "question_text": "Rwanda is a (a) ... country located in East (b) ... It is known for its (c) ... landscapes and stunning hills. The people of Rwanda work (d) ... to improve their lives and communities. The country has a (e) ... culture and it is also rich in traditions and history.",
+      "student_answer": "rich",
       "read_confidence": 0.95
     },
     {
       "section": null,
       "question_no": "12",
       "max_marks": 5.0,
-      "question_text": "Correct them in the space provided. Many people love to see wild animals in their natural habitats. The lion is the king of the jungle. Erephents are very intelligent creatures that can remember things for a long time. Giraffes can reach high trees to eat leaves.",
-      "student_answer": "wild, animals, lion, elephant, trees",
-      "read_confidence": 0.98
+      "question_text": "Correct the following words in the space provided. Many people love to see wld animals in their natural habitats. The laion is the king of the jungle. Erephents are very intelligent creatures that can remember things for a long time. Giraffes can reach high treas to eat leaves.",
+      "student_answer": "wild animals lion elephants trees",
+      "read_confidence": 0.94
     },
     {
       "section": null,
       "question_no": "13a",
       "max_marks": 1.0,
-      "question_text": "remoht",
+      "question_text": "The following jumbled words are names of family relations. Write them properly. a) remoht",
       "student_answer": "mother",
-      "read_confidence": 0.95
+      "read_confidence": 0.98
     },
     {
       "section": null,
       "question_no": "13b",
       "max_marks": 1.0,
-      "question_text": "erssit",
+      "question_text": "The following jumbled words are names of family relations. Write them properly. b) erssit",
       "student_answer": "sister",
-      "read_confidence": 0.95
+      "read_confidence": 0.97
     },
     {
       "section": null,
       "question_no": "13c",
       "max_marks": 1.0,
-      "question_text": "isoucn",
+      "question_text": "The following jumbled words are names of family relations. Write them properly. c) isoucn",
       "student_answer": "cousin",
-      "read_confidence": 0.95
+      "read_confidence": 0.96
     },
     {
       "section": null,
       "question_no": "13d",
       "max_marks": 1.0,
-      "question_text": "tfhrea",
+      "question_text": "The following jumbled words are names of family relations. Write them properly. d) tfhrea",
       "student_answer": "father",
       "read_confidence": 0.95
     },
@@ -542,9 +590,9 @@
       "section": null,
       "question_no": "13e",
       "max_marks": 1.0,
-      "question_text": "tnua",
+      "question_text": "The following jumbled words are names of family relations. Write them properly. e) tnuu",
       "student_answer": "aunt",
-      "read_confidence": 0.95
+      "read_confidence": 0.94
     },
     {
       "section": "D",
@@ -554,5 +602,6 @@
       "student_answer": "A good friend is a person with whom you share everything. He does not betray you when you share secrets. The good friend is always there to assist when in need. He thinks about you when there is an opportunity of promotion or a chance for development. A good friend will always be by your side in difficulties and in good times. He suffers with you and rejoices with you.",
       "read_confidence": 0.95
     }
-  ]
+  ],
+  "expected_total": 100.0
 }

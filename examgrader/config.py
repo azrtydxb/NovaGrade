@@ -14,6 +14,7 @@ class Settings:
     vlm_concurrency: int = 4
     grader_concurrency: int = 8
     llm_seed: int = 0  # sent to vLLM for more reproducible LLM outputs
+    max_transcribe_passes: int = 2  # re-OCR attempts to match the paper's stated total
 
 
 SETTINGS = Settings()

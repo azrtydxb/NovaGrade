@@ -5,10 +5,11 @@ import sys
 from examgrader.config import SETTINGS
 from examgrader.grader import GuideMarkScheme, LLMJudge, grade_paper, guide_coverage
 from examgrader.llm_client import LLMClient
+from examgrader.markmap import extract_mark_map, reconcile
 from examgrader.pdf_to_images import content_pages
 from examgrader.report import write_report
 from examgrader.schemas import GradedPaper, TranscribedPaper
-from examgrader.transcriber import transcribe_paper
+from examgrader.transcriber import transcribe_reconciled
 
 
 def _grader_client():
@@ -36,7 +37,19 @@ def grade_pdf(pdf_path=None, subject=None, *, out_dir=None, guide_path=None,
         stem = os.path.splitext(os.path.basename(pdf_path))[0]
         subject = subject or stem
         pages = content_pages(pdf_path, os.path.join(out_dir, f"{stem}_pages"))
-        transcript = transcribe_paper(vlm_client, pages, subject, os.path.basename(pdf_path))
+        # read the paper's stated mark distribution from its first page, then transcribe in
+        # up to N passes, keeping the one whose detected marks best match that stated total
+        mark_map = extract_mark_map(vlm_client, pages[0]) if pages else {}
+        transcript = transcribe_reconciled(
+            vlm_client, pages, subject, os.path.basename(pdf_path), mark_map,
+            max_passes=SETTINGS.max_transcribe_passes,
+        )
+        transcript.expected_total = mark_map.get("total")
+        rec = reconcile(mark_map, transcript)
+        if rec["expected_total"] is not None and not rec["ok"]:
+            print(f"[reconcile] stated total {rec['expected_total']:g} but detected "
+                  f"{rec['detected_total']:g} (Δ {rec['difference']:+g}) — marks may be "
+                  "mis-read on some questions", file=sys.stderr)
         with open(os.path.join(out_dir, f"{stem}.transcript.json"), "w") as f:
             f.write(transcript.model_dump_json(indent=2))
 
@@ -66,7 +79,10 @@ def grade_pdf(pdf_path=None, subject=None, *, out_dir=None, guide_path=None,
                   f"{', '.join(unused[:10])}{'…' if len(unused) > 10 else ''}", file=sys.stderr)
     else:
         scheme = LLMJudge(grader_client)
+    # denominator = detected marks (the scale the awards are on); reconciliation makes that
+    # converge to the stated total rather than overriding it (which would let scores pass 100)
     paper = grade_paper(scheme, transcript)
+    paper.expected_total = transcript.expected_total  # carry the stated total for the report
 
     write_report(paper, out_dir)
     return paper
