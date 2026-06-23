@@ -3,13 +3,13 @@ import os
 import sys
 
 from examgrader.config import SETTINGS
+from examgrader.dots_transcriber import ocr_page, transcribe_paper_hybrid
 from examgrader.grader import GuideMarkScheme, LLMJudge, grade_paper, guide_coverage
 from examgrader.llm_client import LLMClient
-from examgrader.markmap import extract_mark_map, reconcile, section_reconcile
-from examgrader.pdf_to_images import content_pages
+from examgrader.markmap import extract_mark_map_from_text, reconcile, section_reconcile
+from examgrader.pdf_to_images import render_pdf
 from examgrader.report import write_report
 from examgrader.schemas import GradedPaper, TranscribedPaper
-from examgrader.transcriber import transcribe_reconciled
 
 
 def _grader_client():
@@ -19,8 +19,23 @@ def _grader_client():
     )
 
 
+def _ocr_client():
+    return LLMClient(
+        SETTINGS.ocr_base_url, SETTINGS.ocr_model, SETTINGS.request_timeout,
+        SETTINGS.max_retries, SETTINGS.llm_seed,
+    )
+
+
+def _vlm_client():
+    return LLMClient(
+        SETTINGS.vlm_base_url, SETTINGS.vlm_model, SETTINGS.request_timeout,
+        SETTINGS.max_retries, SETTINGS.llm_seed,
+    )
+
+
 def grade_pdf(pdf_path=None, subject=None, *, out_dir=None, guide_path=None,
-              transcript_path=None, vlm_client=None, grader_client=None) -> GradedPaper:
+              transcript_path=None, ocr_client=None, vlm_client=None,
+              grader_client=None) -> GradedPaper:
     out_dir = out_dir or SETTINGS.out_dir
     os.makedirs(out_dir, exist_ok=True)
     grader_client = grader_client or _grader_client()
@@ -30,19 +45,22 @@ def grade_pdf(pdf_path=None, subject=None, *, out_dir=None, guide_path=None,
         transcript = TranscribedPaper.model_validate_json(open(transcript_path).read())
         subject = subject or transcript.subject
     else:
-        vlm_client = vlm_client or LLMClient(
-            SETTINGS.vlm_base_url, SETTINGS.vlm_model, SETTINGS.request_timeout,
-            SETTINGS.max_retries, SETTINGS.llm_seed,
-        )
+        # Hybrid transcription: dots.ocr reads printed questions + marks; qwen3-vl reads the
+        # student's answers (incl. circled options); the grader model merges the two.
+        ocr_client = ocr_client or _ocr_client()
+        vlm_client = vlm_client or _vlm_client()
         stem = os.path.splitext(os.path.basename(pdf_path))[0]
         subject = subject or stem
-        pages = content_pages(pdf_path, os.path.join(out_dir, f"{stem}_pages"))
-        # read the paper's stated mark distribution from its first page, then transcribe in
-        # up to N passes, keeping the one whose detected marks best match that stated total
-        mark_map = extract_mark_map(vlm_client, pages[0]) if pages else {}
-        transcript = transcribe_reconciled(
-            vlm_client, pages, subject, os.path.basename(pdf_path), mark_map,
-            max_passes=SETTINGS.max_transcribe_passes,
+        # render ALL pages — do NOT pre-filter "blank" pages: sparse exam pages (big
+        # rough-work whitespace) were being wrongly dropped, losing ~half the questions.
+        # Genuinely empty pages just yield no questions from the transcriber.
+        pages = render_pdf(pdf_path, os.path.join(out_dir, f"{stem}_pages"))
+        # read the stated mark distribution from the OCR'd first page
+        mark_map = extract_mark_map_from_text(
+            grader_client, ocr_page(ocr_client, pages[0])) if pages else {}
+        transcript = transcribe_paper_hybrid(
+            ocr_client, vlm_client, grader_client, pages, subject,
+            os.path.basename(pdf_path), mark_map,
         )
         transcript.expected_total = mark_map.get("total")
         rec = reconcile(mark_map, transcript)
