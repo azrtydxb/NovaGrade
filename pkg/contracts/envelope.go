@@ -6,14 +6,14 @@ package contracts
 // inside an Envelope with a PayloadRef pointing to the object-store key
 // that holds the actual payload.
 type Envelope struct {
-	TenantID      string          `json:"tenant_id"`
-	Principal     string          `json:"principal"`
-	SubmissionID  string          `json:"submission_id"`
-	BatchID       string          `json:"batch_id"`
-	Stage         string          `json:"stage"`
-	Attempt       int             `json:"attempt"`
-	CorrelationID string          `json:"correlation_id"`
-	PayloadRef    string          `json:"payload_ref"`
+	TenantID      string `json:"tenant_id"`
+	Principal     string `json:"principal"`
+	SubmissionID  string `json:"submission_id"`
+	BatchID       string `json:"batch_id"`
+	Stage         string `json:"stage"`
+	Attempt       int    `json:"attempt"`
+	CorrelationID string `json:"correlation_id"`
+	PayloadRef    string `json:"payload_ref"`
 }
 
 // Command event types — used in the Stage field to indicate the work to perform.
@@ -27,7 +27,7 @@ const (
 
 // Result event types — used in the Stage field to indicate a completed outcome.
 const (
-	StageRenderResult    string = "render.result"
+	StageRenderResult     string = "render.result"
 	StageTranscribeResult string = "transcribe.result"
 	StageGradeResult      string = "grade.result"
 	StagePublishResult    string = "publish.result"

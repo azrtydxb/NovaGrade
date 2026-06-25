@@ -104,6 +104,11 @@ func handleEnvelope(ctx context.Context, env contracts.Envelope, obj *store.ObjS
 	log.Printf("render: processing submission %s/%s (attempt %d)", env.TenantID, env.SubmissionID, env.Attempt)
 
 	// 1. Download the PDF from the object store.
+	//
+	// Memory trade-off: ObjStore.Get returns []byte, so the entire PDF is held
+	// in memory before being written to disk. This doubles peak memory usage for
+	// large PDFs. A future improvement is to change Get to return an io.ReadCloser
+	// so we can stream directly to the temp file (TODO: update ObjStore interface).
 	pdfData, err := obj.Get(ctx, bucket, env.PayloadRef)
 	if err != nil {
 		return fmt.Errorf("render: get PDF %q: %w", env.PayloadRef, err)

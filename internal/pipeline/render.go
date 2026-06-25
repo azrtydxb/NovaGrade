@@ -6,7 +6,6 @@ package pipeline
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -40,10 +39,11 @@ const (
 func RenderPDF(ctx context.Context, pdfPath, outDir string) ([]string, error) {
 	prefix := filepath.Join(outDir, "page")
 
-	// Resolve pdftoppm — prefer the Homebrew path on macOS, fall back to PATH.
-	pdftoppm, err := resolveBinary("pdftoppm", "/opt/homebrew/bin/pdftoppm")
+	// Resolve pdftoppm via PATH — portable across macOS and Linux.
+	// On macOS with Homebrew, ensure /opt/homebrew/bin is in PATH.
+	pdftoppm, err := exec.LookPath("pdftoppm")
 	if err != nil {
-		return nil, fmt.Errorf("render: %w", err)
+		return nil, fmt.Errorf("render: pdftoppm not found in PATH: %w", err)
 	}
 
 	// Run: pdftoppm -png -r <DPI> <pdfPath> <prefix>
@@ -60,13 +60,21 @@ func RenderPDF(ctx context.Context, pdfPath, outDir string) ([]string, error) {
 	}
 	sort.Strings(matches)
 
-	magick, err := resolveBinary("magick", "/opt/homebrew/bin/magick")
+	// Resolve magick via PATH — portable across macOS and Linux.
+	magick, err := exec.LookPath("magick")
 	if err != nil {
-		return nil, fmt.Errorf("render: %w", err)
+		return nil, fmt.Errorf("render: magick not found in PATH: %w", err)
 	}
 
 	var contentPages []string
 	for _, png := range matches {
+		// Check for context cancellation before each page to allow prompt shutdown.
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		blank, err := isBlank(ctx, magick, png)
 		if err != nil {
 			return nil, err
@@ -91,17 +99,4 @@ func isBlank(ctx context.Context, magickBin, pngPath string) (bool, error) {
 		return false, fmt.Errorf("render: parse mean brightness %q: %w", string(out), err)
 	}
 	return mean >= BlankThreshold, nil
-}
-
-// resolveBinary returns preferredPath if it exists and is executable, otherwise
-// falls back to exec.LookPath(name). Returns an error if neither is found.
-func resolveBinary(name, preferredPath string) (string, error) {
-	if _, err := os.Stat(preferredPath); err == nil {
-		return preferredPath, nil
-	}
-	p, err := exec.LookPath(name)
-	if err != nil {
-		return "", fmt.Errorf("binary %q not found (tried %s and PATH): %w", name, preferredPath, err)
-	}
-	return p, nil
 }
