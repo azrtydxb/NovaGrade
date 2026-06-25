@@ -18,6 +18,7 @@ type Envelope struct {
 
 // Command event types — used in the Stage field to indicate the work to perform.
 const (
+	StageRender     string = "render"
 	StageTranscribe string = "transcribe"
 	StageGrade      string = "grade"
 	StagePublish    string = "publish"
@@ -26,6 +27,7 @@ const (
 
 // Result event types — used in the Stage field to indicate a completed outcome.
 const (
+	StageRenderResult    string = "render.result"
 	StageTranscribeResult string = "transcribe.result"
 	StageGradeResult      string = "grade.result"
 	StagePublishResult    string = "publish.result"
