@@ -67,8 +67,6 @@ const (
 	defaultVLMBaseURL    = "http://192.168.10.246:8003"
 
 	graderModel = "qwen3.6-35b"
-	ocrModel    = "dots-ocr"
-	vlmModel    = "qwen3-vl"
 )
 
 func graderBaseURL() string {
@@ -318,9 +316,6 @@ func compareResults(
 
 	// Check for extra questions in the Go output not in POC.
 	for qno := range goIndex {
-		if _, seen := pocIndex[qno]; seen {
-			continue
-		}
 		// Not in POC results at all (extra question).
 		if _, inPOC := indexGraded(pocResult.Questions)[qno]; !inPOC {
 			t.Logf("%-12s  (extra in Go output — not in POC results)", qno)
@@ -399,7 +394,7 @@ func TestFullPipeline(t *testing.T) {
 	t.Log("  2. transcribe.HybridTranscriber → dots.ocr (:8004) + qwen3-vl (:8003) merge")
 	t.Log("  3. grade.GradePaper → GuideMarkScheme + LLMJudge fallback (:8888)")
 	t.Log("  4. Compare per-question marks to out/*.results.json (±10% total tolerance)")
-	t.Skip("full pipeline parity: render+transcribe driving not wired in this binary — run in DGX env")
+	t.Skip("PLACEHOLDER (full render+transcribe not wired here): render+transcribe driving not wired in this binary — run in DGX env")
 }
 
 // ---------------------------------------------------------------------------
@@ -473,4 +468,5 @@ func TestGradeStageParity(t *testing.T) {
 	// Per-question comparison.
 	strictFailures := compareResults(t, g, goResult, pocResult)
 	t.Logf("strict failures (objective divergences): %d", strictFailures)
+	assert.Equal(t, 0, strictFailures, "objective/guide-covered questions must match POC exactly")
 }
