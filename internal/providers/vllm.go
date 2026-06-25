@@ -221,13 +221,14 @@ func (p *VLLMProvider) call(ctx context.Context, req CompletionReq, messages []i
 	url := strings.TrimRight(p.cfg.BaseURL, "/") + "/v1/chat/completions"
 
 	var lastErr error
-	for attempt := 1; attempt <= p.cfg.MaxRetries; attempt++ {
-		if attempt > 1 {
-			// Linear backoff mirroring the POC: sleep RetryDelay * attempt.
+	for attempt := 0; attempt < p.cfg.MaxRetries; attempt++ {
+		if attempt > 0 {
+			// Linear backoff mirroring the POC: sleep RetryDelay * (attempt+1).
+			// POC: sleep 0.5 * (attempt + 1) where attempt starts at 0.
 			select {
 			case <-ctx.Done():
 				return chatResponse{}, ctx.Err()
-			case <-time.After(p.cfg.RetryDelay * time.Duration(attempt)):
+			case <-time.After(p.cfg.RetryDelay * time.Duration(attempt+1)):
 			}
 		}
 

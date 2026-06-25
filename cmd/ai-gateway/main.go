@@ -37,7 +37,6 @@ func main() {
 		},
 	}
 	provider := providers.NewVLLMProvider(cfg)
-	_ = model // default model, can be overridden per request
 
 	http.HandleFunc("/complete", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -47,6 +46,15 @@ func main() {
 		var req providers.CompletionReq
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.Model == "" {
+			req.Model = model
+		}
+		if req.Model == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "model required"})
 			return
 		}
 		resp, err := provider.Complete(r.Context(), req)
