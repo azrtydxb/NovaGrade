@@ -135,8 +135,8 @@ func TestHandleEnvelope_CleanTranscript_AdvancesToGrading(t *testing.T) {
 	}}
 	o := NewOrchestrator(st, bus, art, testBucket)
 
-	if err := o.handleEnvelope(transcribeResultEnv(subID, key)); err != nil {
-		t.Fatalf("handleEnvelope: %v", err)
+	if err := o.HandleEnvelope(transcribeResultEnv(subID, key)); err != nil {
+		t.Fatalf("HandleEnvelope: %v", err)
 	}
 
 	if len(st.setStateCalls) != 1 {
@@ -180,8 +180,8 @@ func TestHandleEnvelope_GateTripped_RequiresReview(t *testing.T) {
 	}}
 	o := NewOrchestrator(st, bus, art, testBucket)
 
-	if err := o.handleEnvelope(transcribeResultEnv(subID, key)); err != nil {
-		t.Fatalf("handleEnvelope: %v", err)
+	if err := o.HandleEnvelope(transcribeResultEnv(subID, key)); err != nil {
+		t.Fatalf("HandleEnvelope: %v", err)
 	}
 
 	if len(st.setStateCalls) != 1 {
@@ -217,8 +217,8 @@ func TestHandleEnvelope_Redelivery_NoDoubleDispatch(t *testing.T) {
 		SubmissionID: subID.String(),
 		Stage:        "submit",
 	}
-	if err := o.handleEnvelope(env); err != nil {
-		t.Fatalf("handleEnvelope: %v", err)
+	if err := o.HandleEnvelope(env); err != nil {
+		t.Fatalf("HandleEnvelope: %v", err)
 	}
 
 	if len(st.setStateCalls) != 0 {
@@ -246,7 +246,7 @@ func TestDLQHandler_TranscribeFailure_MarksFailed(t *testing.T) {
 		PayloadRef:   "tenant-1/" + subID.String() + "/render-result.json",
 	}
 
-	handler := o.dlqHandler(contracts.StageTranscribe)
+	handler := o.DLQHandler(contracts.StageTranscribe)
 	if err := handler(env); err != nil {
 		t.Fatalf("dlqHandler: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestHandleEnvelope_MissingSidecar_Errors(t *testing.T) {
 	art := &fakeArtifacts{objects: map[string][]byte{}} // sidecar absent
 	o := NewOrchestrator(st, bus, art, testBucket)
 
-	err := o.handleEnvelope(transcribeResultEnv(subID, key))
+	err := o.HandleEnvelope(transcribeResultEnv(subID, key))
 	if err == nil {
 		t.Fatalf("want error for missing sidecar, got nil")
 	}
