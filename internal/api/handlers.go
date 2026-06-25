@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -18,6 +19,24 @@ import (
 	"github.com/azrtydxb/novagrade/internal/store"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 )
+
+// validSubmissionStates is the set of known SubmissionState values for input validation.
+var validSubmissionStates = map[contracts.SubmissionState]bool{
+	contracts.StateUploaded:                    true,
+	contracts.StateQueued:                      true,
+	contracts.StateSplittingPages:              true,
+	contracts.StateExtractingMetadata:          true,
+	contracts.StateTranscribing:                true,
+	contracts.StateTranscriptionReviewRequired: true,
+	contracts.StateGrading:                     true,
+	contracts.StateGradingReviewRequired:       true,
+	contracts.StateTeacherReview:               true,
+	contracts.StateApproved:                    true,
+	contracts.StatePublished:                   true,
+	contracts.StateExported:                    true,
+	contracts.StateArchived:                    true,
+	contracts.StateFailed:                      true,
+}
 
 // SubmissionStore is the subset of store.Store used by the API handlers.
 type SubmissionStore interface {
@@ -95,16 +114,9 @@ func (h *Handlers) PostSubmission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	submissionID := uuid.New()
-	objectKey := fmt.Sprintf("%s/%s/source.pdf", p.TenantID, submissionID)
-	if err := h.Objects.PutObject(r.Context(), objectKey, pdfData); err != nil {
-		http.Error(w, "storage error", http.StatusInternalServerError)
-		return
-	}
-
+	// Build submission params (without SourcePDFKey — we don't know sub.ID yet).
 	params := store.CreateSubmissionParams{
-		TenantID:     tenantID,
-		SourcePDFKey: &objectKey,
+		TenantID: tenantID,
 	}
 	// Optional form fields
 	if avid := r.FormValue("assessment_version_id"); avid != "" {
@@ -118,9 +130,18 @@ func (h *Handlers) PostSubmission(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Create the submission record first so the DB generates the canonical UUID.
 	sub, err := h.Store.CreateSubmission(r.Context(), params)
 	if err != nil {
 		http.Error(w, "store error", http.StatusInternalServerError)
+		return
+	}
+
+	// Store the PDF at {tenantID}/{sub.ID}/source.pdf so the path matches the
+	// canonical submission UUID returned in the 201 response.
+	objectKey := fmt.Sprintf("%s/%s/source.pdf", p.TenantID, sub.ID)
+	if err := h.Objects.PutObject(r.Context(), objectKey, pdfData); err != nil {
+		http.Error(w, "storage error", http.StatusInternalServerError)
 		return
 	}
 
@@ -131,8 +152,10 @@ func (h *Handlers) PostSubmission(w http.ResponseWriter, r *http.Request) {
 		Stage:         contracts.StageSubmitExam,
 		CorrelationID: uuid.New().String(),
 	}
-	// Best-effort publish; submission is already created
-	_ = h.Bus.Publish(r.Context(), "commands.q", env)
+	// Best-effort publish; submission is already created. Log on failure.
+	if err := h.Bus.Publish(r.Context(), "commands.q", env); err != nil {
+		log.Printf("warn: failed to publish SubmitExam command for submission %s: %v", sub.ID, err)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -197,6 +220,10 @@ func (h *Handlers) ListSubmissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stateParam := contracts.SubmissionState(r.URL.Query().Get("state"))
+	if stateParam != "" && !validSubmissionStates[stateParam] {
+		http.Error(w, "invalid state value", http.StatusBadRequest)
+		return
+	}
 	subs, err := h.Store.ListSubmissionsByState(r.Context(), tenantID, stateParam)
 	if err != nil {
 		http.Error(w, "store error", http.StatusInternalServerError)

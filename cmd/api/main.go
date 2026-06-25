@@ -136,7 +136,7 @@ type objStoreAdapter struct {
 }
 
 func (a *objStoreAdapter) PutObject(ctx context.Context, key string, data []byte) error {
-	return a.store.Put(ctx, a.bucket, key, data, "application/octet-stream")
+	return a.store.Put(ctx, a.bucket, key, data, "application/pdf")
 }
 
 func (a *objStoreAdapter) GetObject(ctx context.Context, key string) ([]byte, error) {
