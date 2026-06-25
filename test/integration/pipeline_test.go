@@ -785,6 +785,21 @@ func pollSubmission(
 	return ""
 }
 
+// assertStaysZero polls *counter every 100ms for the given window and calls
+// t.Fatalf immediately if it ever becomes non-zero. This provides a
+// deterministic "was never dispatched" guarantee, catching late dispatches that
+// a fixed sleep would race.
+func assertStaysZero(t *testing.T, counter *int64, window time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(window)
+	for time.Now().Before(deadline) {
+		if v := atomic.LoadInt64(counter); v != 0 {
+			t.Fatalf("expected counter to stay 0 throughout %s window, got %d", window, v)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // API submission helper
 // ─────────────────────────────────────────────────────────────────────────────
@@ -929,6 +944,12 @@ func TestHappyPath(t *testing.T) {
 		"graded.v1.json must be a valid GradedPaper")
 	assert.NotEmpty(t, gradedPaper.Questions,
 		"graded paper must contain at least one question")
+	assert.Greater(t, gradedPaper.MaxTotal, float64(0),
+		"graded paper MaxTotal must be > 0 (zeroed denominator means broken grading)")
+	assert.GreaterOrEqual(t, gradedPaper.Score100, float64(0),
+		"graded paper Score100 must be >= 0")
+	assert.LessOrEqual(t, gradedPaper.Score100, float64(100),
+		"graded paper Score100 must be <= 100")
 	t.Logf("happy path: graded paper — questions=%d score=%.1f/%.1f (%.1f%%)",
 		len(gradedPaper.Questions), gradedPaper.Total, gradedPaper.MaxTotal, gradedPaper.Score100)
 }
@@ -1001,10 +1022,10 @@ func TestForcedReviewGate(t *testing.T) {
 	assert.Equal(t, contracts.StateTranscriptionReviewRequired, finalState,
 		"checksum mismatch must route to transcription_review_required")
 
-	// Brief pause to ensure any erroneous grade dispatch would have been consumed.
-	time.Sleep(500 * time.Millisecond)
-	assert.Equal(t, int64(0), atomic.LoadInt64(&gradeCallCount),
-		"grade worker must not be invoked when transcript is flagged")
+	// Deterministic quiescent check: poll every 100ms for 1.5s and fail immediately
+	// if gradeCallCount ever becomes non-zero. This catches a late dispatch rather
+	// than racing a fixed sleep.
+	assertStaysZero(t, &gradeCallCount, 1500*time.Millisecond)
 
 	t.Logf("forced gate: correctly landed in transcription_review_required, grade_calls=%d",
 		atomic.LoadInt64(&gradeCallCount))
