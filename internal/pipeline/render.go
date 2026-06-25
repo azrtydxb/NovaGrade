@@ -37,14 +37,20 @@ const (
 // with blank pages omitted. An error is returned if pdftoppm fails or if any
 // magick identify invocation fails.
 func RenderPDF(ctx context.Context, pdfPath, outDir string) ([]string, error) {
-	prefix := filepath.Join(outDir, "page")
-
-	// Resolve pdftoppm via PATH — portable across macOS and Linux.
+	// Resolve both binaries via PATH before any subprocess is spawned.
+	// Fail fast if either is absent — portable across macOS and Linux.
 	// On macOS with Homebrew, ensure /opt/homebrew/bin is in PATH.
 	pdftoppm, err := exec.LookPath("pdftoppm")
 	if err != nil {
 		return nil, fmt.Errorf("render: pdftoppm not found in PATH: %w", err)
 	}
+
+	magick, err := exec.LookPath("magick")
+	if err != nil {
+		return nil, fmt.Errorf("render: magick not found in PATH: %w", err)
+	}
+
+	prefix := filepath.Join(outDir, "page")
 
 	// Run: pdftoppm -png -r <DPI> <pdfPath> <prefix>
 	cmd := exec.CommandContext(ctx, pdftoppm, "-png", "-r", strconv.Itoa(DefaultDPI), pdfPath, prefix)
@@ -59,12 +65,6 @@ func RenderPDF(ctx context.Context, pdfPath, outDir string) ([]string, error) {
 		return nil, fmt.Errorf("render: glob %q: %w", pattern, err)
 	}
 	sort.Strings(matches)
-
-	// Resolve magick via PATH — portable across macOS and Linux.
-	magick, err := exec.LookPath("magick")
-	if err != nil {
-		return nil, fmt.Errorf("render: magick not found in PATH: %w", err)
-	}
 
 	var contentPages []string
 	for _, png := range matches {

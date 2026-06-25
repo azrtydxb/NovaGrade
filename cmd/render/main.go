@@ -140,6 +140,10 @@ func handleEnvelope(ctx context.Context, env contracts.Envelope, obj *store.ObjS
 
 	// 4. Upload each content-page PNG to the object store.
 	for i, pngPath := range pages {
+		// Memory trade-off: os.ReadFile loads the entire PNG into memory before upload.
+		// For large images or high page counts, this increases peak memory usage.
+		// A future improvement is to change Put to accept an io.Reader so we can stream
+		// directly from disk (TODO: update ObjStore interface, matching PDF download).
 		data, err := os.ReadFile(pngPath)
 		if err != nil {
 			return fmt.Errorf("render: read page PNG %s: %w", pngPath, err)
