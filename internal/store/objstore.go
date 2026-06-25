@@ -5,6 +5,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -69,16 +70,36 @@ func (s *ObjStore) Put(ctx context.Context, bucket, key string, data []byte, con
 }
 
 // Get retrieves the full object stored at bucket/key.
+// It returns a wrapped ErrNotFound when the object does not exist (minio
+// ErrorResponse Code "NoSuchKey" or "NotFound"), so callers can use
+// errors.Is(err, store.ErrNotFound) instead of duck-typing the minio type.
 func (s *ObjStore) Get(ctx context.Context, bucket, key string) ([]byte, error) {
 	obj, err := s.client.GetObject(ctx, bucket, key, minio.GetObjectOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("store: get %q/%q: %w", bucket, key, err)
+		return nil, wrapMinioErr(fmt.Errorf("store: get %q/%q: %w", bucket, key, err))
 	}
 	defer func() { _ = obj.Close() }()
 
 	data, err := io.ReadAll(obj)
 	if err != nil {
-		return nil, fmt.Errorf("store: read %q/%q: %w", bucket, key, err)
+		return nil, wrapMinioErr(fmt.Errorf("store: read %q/%q: %w", bucket, key, err))
 	}
 	return data, nil
+}
+
+// wrapMinioErr checks whether err contains a minio.ErrorResponse with code
+// "NoSuchKey" or "NotFound" and, if so, wraps it with ErrNotFound so that
+// callers can use errors.Is(err, store.ErrNotFound).
+func wrapMinioErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	var minioErr minio.ErrorResponse
+	if errors.As(err, &minioErr) {
+		code := minioErr.Code
+		if code == "NoSuchKey" || code == "NotFound" {
+			return fmt.Errorf("%w: %w", ErrNotFound, err)
+		}
+	}
+	return err
 }

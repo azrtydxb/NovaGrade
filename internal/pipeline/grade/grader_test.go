@@ -34,12 +34,17 @@ func (m *mockProvider) Complete(_ context.Context, _ providers.CompletionReq) (p
 // ─────────────────────────────────────────────────────────────────────────────
 
 func TestGuideMarkScheme_ExactCI_Match_NoLLMCall(t *testing.T) {
-	mock := &mockProvider{}
+	// Use two independent mocks so the assertion "provider must NOT be called"
+	// is unambiguous: fallbackMock is wired to the LLMJudge fallback, and
+	// schemeMock is wired to the GuideMarkScheme's own rubric provider.
+	// Neither must be invoked for a deterministic exact_ci match.
+	fallbackMock := &mockProvider{}
+	schemeMock := &mockProvider{}
 	guide := grade.Guide{
 		"Q1": {MaxMarks: 2, Answer: "Paris", Match: "exact_ci"},
 	}
-	fallback := grade.NewLLMJudge(mock, "any-model")
-	scheme := grade.NewGuideMarkScheme(guide, fallback, mock, "any-model")
+	fallback := grade.NewLLMJudge(fallbackMock, "any-model")
+	scheme := grade.NewGuideMarkScheme(guide, fallback, schemeMock, "any-model")
 
 	q := contracts.TranscribedQuestion{
 		QuestionNo:     "Q1",
@@ -58,8 +63,10 @@ func TestGuideMarkScheme_ExactCI_Match_NoLLMCall(t *testing.T) {
 	assert.Equal(t, 1.0, gq.GradeConfidence)
 	assert.NotNil(t, gq.Flags, "Flags must never be nil")
 
-	// CRITICAL: the provider must NOT have been called for a deterministic match.
-	assert.False(t, mock.called, "AIProvider.Complete must NOT be called for exact_ci match")
+	// CRITICAL: neither the fallback LLMJudge nor the scheme's rubric provider
+	// must have been called for a deterministic exact_ci match.
+	assert.False(t, fallbackMock.called, "fallback AIProvider.Complete must NOT be called for exact_ci match")
+	assert.False(t, schemeMock.called, "scheme AIProvider.Complete must NOT be called for exact_ci match")
 }
 
 func TestGuideMarkScheme_ExactCI_NoMatch_NoLLMCall(t *testing.T) {

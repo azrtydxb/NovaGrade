@@ -159,7 +159,7 @@ func handleEnvelope(
 			scheme = grade.NewGuideMarkScheme(g, llmJudge, prov, gradeModel)
 			log.Printf("grade: loaded guide with %d entries", len(g))
 		}
-	} else if !isNotFound(err) {
+	} else if !errors.Is(err, store.ErrNotFound) {
 		// An actual storage error (not a missing object) is fatal.
 		return fmt.Errorf("grade: get guide %q: %w", guideKey, err)
 	} else {
@@ -242,24 +242,6 @@ func collectUniqueFlags(paper contracts.GradedPaper) []string {
 		flags = []string{}
 	}
 	return flags
-}
-
-// isNotFound returns true when err indicates that the requested object does not
-// exist in the object store. The MinIO client surfaces this as a response error
-// with error code "NoSuchKey".
-func isNotFound(err error) bool {
-	if err == nil {
-		return false
-	}
-	// minio-go returns a minio.ErrorResponse with Code "NoSuchKey" for missing objects.
-	// We detect it by sentinel string rather than importing the minio package directly
-	// in this binary (it is already a transitive dependency via store.ObjStore).
-	var minioErr interface{ Code() string }
-	if errors.As(err, &minioErr) {
-		code := minioErr.Code()
-		return code == "NoSuchKey" || code == "NotFound"
-	}
-	return false
 }
 
 // envOrDefault returns the value of the named environment variable, or def if

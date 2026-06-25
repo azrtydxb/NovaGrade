@@ -32,7 +32,14 @@ func GradePaper(ctx context.Context, scheme MarkScheme, paper contracts.Transcri
 		gq, err := scheme.Grade(ctx, q)
 		if err != nil {
 			// Isolate the failure: flag it and continue.
-			gq = gradingFailed(q, q.MaxMarks, answerFlags(q), err.Error())
+			// Prefer gq.MaxMarks (set by the scheme, e.g. when a guide overrides
+			// the paper's per-question max_marks) and fall back to q.MaxMarks only
+			// when the scheme returned a zero-value GradedQuestion.
+			maxMarks := gq.MaxMarks
+			if maxMarks == 0 {
+				maxMarks = q.MaxMarks
+			}
+			gq = gradingFailed(q, maxMarks, answerFlags(q), err.Error())
 		}
 		// Guarantee non-nil flags at the aggregation layer as well.
 		gq.Flags = nonNilFlags(gq.Flags)
