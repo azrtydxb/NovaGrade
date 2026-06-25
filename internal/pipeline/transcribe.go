@@ -336,15 +336,18 @@ func extractJSON(s string) (json.RawMessage, bool) {
 	stripped := strings.TrimSpace(s)
 
 	if after, found := strings.CutPrefix(stripped, "```"); found {
-		stripped = after
-		if after2, found2 := strings.CutPrefix(stripped, "json"); found2 {
-			stripped = after2
+		// Find the FIRST closing fence after the opening one so we do not
+		// accidentally truncate JSON that contains a literal ``` later in
+		// the text (e.g. a second fenced block with an explanation).
+		remainder := after
+		if after2, found2 := strings.CutPrefix(remainder, "json"); found2 {
+			remainder = after2
 		}
-		stripped = strings.TrimSpace(stripped)
-		if idx := strings.LastIndex(stripped, "```"); idx >= 0 {
-			stripped = stripped[:idx]
+		remainder = strings.TrimSpace(remainder)
+		if idx := strings.Index(remainder, "```"); idx >= 0 {
+			remainder = remainder[:idx]
 		}
-		stripped = strings.TrimSpace(stripped)
+		stripped = strings.TrimSpace(remainder)
 	}
 
 	if json.Valid([]byte(stripped)) {

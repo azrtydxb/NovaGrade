@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/azrtydxb/novagrade/pkg/contracts"
@@ -126,9 +127,14 @@ func markBudgetHint(m MarkMap) string {
 		parts = append(parts, fmt.Sprintf("the whole paper is worth %g marks", *m.Total))
 	}
 	if len(m.Sections) > 0 {
+		keys := make([]string, 0, len(m.Sections))
+		for k := range m.Sections {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
 		var secs []string
-		for k, v := range m.Sections {
-			secs = append(secs, fmt.Sprintf("Section %s = %g", k, v))
+		for _, k := range keys {
+			secs = append(secs, fmt.Sprintf("Section %s = %g", k, m.Sections[k]))
 		}
 		parts = append(parts, "section budgets are: "+strings.Join(secs, ", "))
 	}

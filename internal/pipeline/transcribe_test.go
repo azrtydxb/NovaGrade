@@ -228,3 +228,164 @@ func containsImageIndex(req providers.CompletionReq, i int) bool {
 	}
 	return false
 }
+
+// TestTranscribeIsolation_OCRFailure verifies that an OCR error on one page
+// causes that page to be skipped while all other pages still transcribe.
+func TestTranscribeIsolation_OCRFailure(t *testing.T) {
+	prov := &fakeProvider{
+		responses: []scriptedResponse{
+			// mark map: no distribution (junk → ignored)
+			{
+				match: func(r providers.CompletionReq) bool {
+					return isReason(r) && strings.Contains(lastUserText(r), "marks distribution")
+				},
+				content: `not json at all`,
+			},
+			// OCR page 0 → error (this page must be skipped entirely)
+			{
+				match: func(r providers.CompletionReq) bool { return isOCR(r) && containsImageIndex(r, 0) },
+				err:   fmt.Errorf("OCR model unavailable"),
+			},
+			// OCR page 1 → success
+			{
+				match:   func(r providers.CompletionReq) bool { return isOCR(r) && containsImageIndex(r, 1) },
+				content: "Section A\n2a. What is 2+2? (4 marks) 4",
+			},
+			// structuring page 1 → valid questions
+			{
+				match: func(r providers.CompletionReq) bool {
+					return isReason(r) && strings.Contains(lastUserText(r), "2+2")
+				},
+				content: `[{"section":"A","question_no":"2a","max_marks":4,"question_text":"What is 2+2?"}]`,
+			},
+			// answers for page 1
+			{
+				match:   func(r providers.CompletionReq) bool { return isVLM(r) && containsImageIndex(r, 1) },
+				content: `[{"question_no":"2a","student_answer":"4"}]`,
+			},
+		},
+	}
+
+	pages := [][]byte{pageBytes(0), pageBytes(1)}
+	paper, err := pipeline.Transcribe(context.Background(), prov, pages, "Math")
+	if err != nil {
+		t.Fatalf("Transcribe must not fail when one page's OCR errors: %v", err)
+	}
+	// Page 0 was skipped due to OCR error; page 1 must still produce its question.
+	if len(paper.Questions) != 1 {
+		t.Fatalf("expected 1 question (OCR-failed page skipped), got %d: %+v", len(paper.Questions), paper.Questions)
+	}
+	q := paper.Questions[0]
+	if q.QuestionNo != "2a" {
+		t.Errorf("surviving question_no: got %q want %q", q.QuestionNo, "2a")
+	}
+	if q.MaxMarks != 4 {
+		t.Errorf("surviving max_marks: got %v want 4", q.MaxMarks)
+	}
+	if q.StudentAnswer != "4" {
+		t.Errorf("surviving student_answer: got %q want %q", q.StudentAnswer, "4")
+	}
+}
+
+// TestTranscribeIsolation_VLMFailure verifies that a VLM answer-reading error
+// on one page leaves that page's questions with EMPTY student answers (not
+// dropped, not scrambled), while other pages' answers remain intact.
+func TestTranscribeIsolation_VLMFailure(t *testing.T) {
+	prov := &fakeProvider{
+		responses: []scriptedResponse{
+			// mark map: no distribution (junk → ignored)
+			{
+				match: func(r providers.CompletionReq) bool {
+					return isReason(r) && strings.Contains(lastUserText(r), "marks distribution")
+				},
+				content: `not json at all`,
+			},
+			// OCR page 0: a good page whose VLM call will fail
+			{
+				match:   func(r providers.CompletionReq) bool { return isOCR(r) && containsImageIndex(r, 0) },
+				content: "Section A\n1a. Capital of France? (5 marks) Paris",
+			},
+			// OCR page 1: a good page whose VLM call will succeed
+			{
+				match:   func(r providers.CompletionReq) bool { return isOCR(r) && containsImageIndex(r, 1) },
+				content: "Section A\n2a. 2+2? (4 marks) 4",
+			},
+			// structuring page 0 → valid
+			{
+				match: func(r providers.CompletionReq) bool {
+					return isReason(r) && strings.Contains(lastUserText(r), "Capital of France")
+				},
+				content: `[{"section":"A","question_no":"1a","max_marks":5,"question_text":"Capital of France?"}]`,
+			},
+			// structuring page 1 → valid
+			{
+				match: func(r providers.CompletionReq) bool {
+					return isReason(r) && strings.Contains(lastUserText(r), "2+2")
+				},
+				content: `[{"section":"A","question_no":"2a","max_marks":4,"question_text":"2+2?"}]`,
+			},
+			// VLM page 0 → error (answers for 1a must be empty string, question must survive)
+			{
+				match: func(r providers.CompletionReq) bool { return isVLM(r) && containsImageIndex(r, 0) },
+				err:   fmt.Errorf("VLM timeout"),
+			},
+			// VLM page 1 → success
+			{
+				match:   func(r providers.CompletionReq) bool { return isVLM(r) && containsImageIndex(r, 1) },
+				content: `[{"question_no":"2a","student_answer":"4"}]`,
+			},
+		},
+	}
+
+	pages := [][]byte{pageBytes(0), pageBytes(1)}
+	paper, err := pipeline.Transcribe(context.Background(), prov, pages, "Math")
+	if err != nil {
+		t.Fatalf("Transcribe must not fail when one page's VLM errors: %v", err)
+	}
+	// Both pages must contribute their questions: 1a (empty answer) and 2a ("4").
+	if len(paper.Questions) != 2 {
+		t.Fatalf("expected 2 questions (VLM-failed page keeps questions), got %d: %+v", len(paper.Questions), paper.Questions)
+	}
+
+	// Locate by question_no so order doesn't matter.
+	byNo := map[string]struct {
+		answer   string
+		maxMarks float64
+	}{}
+	for _, q := range paper.Questions {
+		byNo[q.QuestionNo] = struct {
+			answer   string
+			maxMarks float64
+		}{q.StudentAnswer, q.MaxMarks}
+	}
+
+	q1a, ok1a := byNo["1a"]
+	if !ok1a {
+		t.Errorf("question 1a missing from output; got keys: %v", func() []string {
+			keys := make([]string, 0, len(byNo))
+			for k := range byNo {
+				keys = append(keys, k)
+			}
+			return keys
+		}())
+	} else {
+		if q1a.answer != "" {
+			t.Errorf("1a student_answer: got %q want empty string (VLM failed)", q1a.answer)
+		}
+		if q1a.maxMarks != 5 {
+			t.Errorf("1a max_marks: got %v want 5", q1a.maxMarks)
+		}
+	}
+
+	q2a, ok2a := byNo["2a"]
+	if !ok2a {
+		t.Errorf("question 2a missing from output")
+	} else {
+		if q2a.answer != "4" {
+			t.Errorf("2a student_answer: got %q want %q (other page must be intact)", q2a.answer, "4")
+		}
+		if q2a.maxMarks != 4 {
+			t.Errorf("2a max_marks: got %v want 4", q2a.maxMarks)
+		}
+	}
+}
