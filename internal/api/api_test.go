@@ -56,6 +56,18 @@ func (f *FakeStore) CreateSubmission(_ context.Context, p store.CreateSubmission
 	return sub, nil
 }
 
+func (f *FakeStore) SetSourcePDFKey(_ context.Context, id uuid.UUID, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	sub, ok := f.submissions[id]
+	if !ok {
+		return fmt.Errorf("SetSourcePDFKey %s: %w", id, store.ErrNotFound)
+	}
+	sub.SourcePDFKey = &key
+	f.submissions[id] = sub
+	return nil
+}
+
 func (f *FakeStore) GetSubmission(_ context.Context, id uuid.UUID) (store.Submission, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -219,6 +231,15 @@ func TestPostSubmission_JWT(t *testing.T) {
 	require.Len(t, cmds, 1)
 	assert.Equal(t, contracts.StageSubmitExam, cmds[0].Stage)
 	assert.Equal(t, tenantID.String(), cmds[0].TenantID)
+
+	// Verify the stored submission row had its source_pdf_key persisted to the
+	// canonical artifact location {tenant}/{sub.ID}/source.pdf.
+	subID, err := uuid.Parse(resp["submission_id"])
+	require.NoError(t, err)
+	stored, err := fakeStore.GetSubmission(context.Background(), subID)
+	require.NoError(t, err)
+	require.NotNil(t, stored.SourcePDFKey)
+	assert.Equal(t, fmt.Sprintf("%s/%s/source.pdf", tenantID, subID), *stored.SourcePDFKey)
 }
 
 func TestPostSubmission_APIKey(t *testing.T) {

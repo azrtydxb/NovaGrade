@@ -15,6 +15,9 @@ type Querier interface {
 	FailSubmission(ctx context.Context, arg FailSubmissionParams) (int64, error)
 	GetSubmission(ctx context.Context, id uuid.UUID) (Submission, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
+	// When $2 is the empty string, no state filter is applied (all states match).
+	ListSubmissionsByState(ctx context.Context, arg ListSubmissionsByStateParams) ([]Submission, error)
+	SetSourcePDFKey(ctx context.Context, arg SetSourcePDFKeyParams) (int64, error)
 	SetSubmissionState(ctx context.Context, arg SetSubmissionStateParams) (int64, error)
 }
 

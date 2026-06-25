@@ -116,6 +116,78 @@ func (q *Queries) GetSubmission(ctx context.Context, id uuid.UUID) (Submission, 
 	return i, err
 }
 
+const listSubmissionsByState = `-- name: ListSubmissionsByState :many
+SELECT
+    id, tenant_id, assessment_version_id, student_id,
+    state, current_stage, attempt, error_detail,
+    source_pdf_key, transcript_key, graded_key,
+    created_at, updated_at
+FROM submission
+WHERE tenant_id = $1
+  AND ($2 = '' OR state = $2)
+ORDER BY created_at DESC
+`
+
+type ListSubmissionsByStateParams struct {
+	TenantID uuid.UUID
+	Column2  interface{}
+}
+
+// When $2 is the empty string, no state filter is applied (all states match).
+func (q *Queries) ListSubmissionsByState(ctx context.Context, arg ListSubmissionsByStateParams) ([]Submission, error) {
+	rows, err := q.db.Query(ctx, listSubmissionsByState, arg.TenantID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Submission
+	for rows.Next() {
+		var i Submission
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.AssessmentVersionID,
+			&i.StudentID,
+			&i.State,
+			&i.CurrentStage,
+			&i.Attempt,
+			&i.ErrorDetail,
+			&i.SourcePdfKey,
+			&i.TranscriptKey,
+			&i.GradedKey,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setSourcePDFKey = `-- name: SetSourcePDFKey :execrows
+UPDATE submission
+   SET source_pdf_key = $2,
+       updated_at     = now()
+ WHERE id = $1
+`
+
+type SetSourcePDFKeyParams struct {
+	ID           uuid.UUID
+	SourcePdfKey pgtype.Text
+}
+
+func (q *Queries) SetSourcePDFKey(ctx context.Context, arg SetSourcePDFKeyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSourcePDFKey, arg.ID, arg.SourcePdfKey)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setSubmissionState = `-- name: SetSubmissionState :execrows
 UPDATE submission
    SET state      = $1,

@@ -41,6 +41,7 @@ var validSubmissionStates = map[contracts.SubmissionState]bool{
 // SubmissionStore is the subset of store.Store used by the API handlers.
 type SubmissionStore interface {
 	CreateSubmission(ctx context.Context, p store.CreateSubmissionParams) (store.Submission, error)
+	SetSourcePDFKey(ctx context.Context, id uuid.UUID, key string) error
 	GetSubmission(ctx context.Context, id uuid.UUID) (store.Submission, error)
 	ListSubmissionsByState(ctx context.Context, tenantID uuid.UUID, state contracts.SubmissionState) ([]store.Submission, error)
 }
@@ -142,6 +143,15 @@ func (h *Handlers) PostSubmission(w http.ResponseWriter, r *http.Request) {
 	objectKey := fmt.Sprintf("%s/%s/source.pdf", p.TenantID, sub.ID)
 	if err := h.Objects.PutObject(r.Context(), objectKey, pdfData); err != nil {
 		http.Error(w, "storage error", http.StatusInternalServerError)
+		return
+	}
+
+	// Persist the artifact location on the submission row. The object already
+	// exists; if we cannot record its key the row would be inconsistent (null
+	// source_pdf_key), so fail the request and do not publish the command.
+	if err := h.Store.SetSourcePDFKey(r.Context(), sub.ID, objectKey); err != nil {
+		log.Printf("error: failed to persist source_pdf_key for submission %s: %v", sub.ID, err)
+		http.Error(w, "store error", http.StatusInternalServerError)
 		return
 	}
 
