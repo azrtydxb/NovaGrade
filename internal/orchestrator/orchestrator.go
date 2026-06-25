@@ -134,6 +134,17 @@ func (o *Orchestrator) HandleEnvelope(env contracts.Envelope) error {
 		return fmt.Errorf("orchestrator: get submission %s: %w", subID, err)
 	}
 
+	// Tenant-match guard: the envelope's claimed tenant must match the tenant
+	// persisted on the submission row. A mismatch means a spoofed/cross-tenant
+	// message — drop it (ack, no requeue: it will never reconcile) WITHOUT
+	// transitioning state. Downstream dispatch derives the tenant from sub
+	// (the trusted row), not env, so a spoofed tenant cannot propagate.
+	if env.TenantID != sub.TenantID.String() {
+		log.Printf("orchestrator: SECURITY: tenant mismatch for submission %s — envelope tenant %q != submission tenant %q; dropping envelope without state change",
+			subID, env.TenantID, sub.TenantID.String())
+		return nil
+	}
+
 	ev, err := StageToEvent(env.Stage)
 	if err != nil {
 		return fmt.Errorf("orchestrator: map stage %q to event: %w", env.Stage, err)
@@ -224,7 +235,10 @@ func (o *Orchestrator) dispatchNext(ctx context.Context, orig contracts.Envelope
 	}
 
 	next := contracts.Envelope{
-		TenantID:      orig.TenantID,
+		// Derive the tenant from the persisted submission row (the trusted source),
+		// not from the incoming envelope, so a spoofed tenant cannot propagate into
+		// downstream envelopes or object keys.
+		TenantID:      sub.TenantID.String(),
 		Principal:     orig.Principal,
 		SubmissionID:  orig.SubmissionID,
 		BatchID:       orig.BatchID,

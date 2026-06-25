@@ -16,7 +16,9 @@
 //	MINIO_ENDPOINT       — MinIO/S3 endpoint (host:port)
 //	MINIO_ACCESS_KEY     — MinIO access key
 //	MINIO_SECRET_KEY     — MinIO secret key
-//	MINIO_BUCKET         — MinIO bucket name (default "novagrade")
+//	MINIO_BUCKET         — MinIO bucket name (default "submissions")
+//	SCANNER_API_KEY      — comma-separated static scanner keys, each
+//	                       formatted "key:tenantID:principalID" (optional)
 //	RABBITMQ_URL         — RabbitMQ AMQP URL
 package main
 
@@ -27,6 +29,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -71,7 +74,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("api: connect to minio: %v", err)
 	}
-	bucket := getenv("MINIO_BUCKET", "novagrade")
+	bucket := getenv("MINIO_BUCKET", "submissions")
 	if err := objStore.EnsureBucket(ctx, bucket); err != nil {
 		log.Fatalf("api: ensure bucket: %v", err)
 	}
@@ -88,9 +91,11 @@ func main() {
 		log.Fatal("api: JWT_SIGNING_KEY must be set")
 	}
 	resolver := auth.NewAPIKeyResolver()
-	// Phase 1: register any static API keys from env (SCANNER_API_KEY=key:tenantID:principalID)
-	// Production deployments inject keys via config; this is a placeholder.
-	_ = domain.RoleScanner // ensure domain import used
+	// Register static scanner API keys from SCANNER_API_KEY. The value is a
+	// comma-separated list of "key:tenantID:principalID" entries; each is
+	// registered as a scanner principal so the middleware's X-API-Key branch
+	// resolves it. An empty/unset env is fine (no scanner keys).
+	registerScannerKeys(resolver, os.Getenv("SCANNER_API_KEY"))
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
 	h := &api.Handlers{
@@ -118,6 +123,34 @@ func main() {
 	log.Printf("api: listening on %s", addr)
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("api: server: %v", err)
+	}
+}
+
+// registerScannerKeys parses a comma-separated SCANNER_API_KEY value, where each
+// entry is "key:tenantID:principalID", and registers each as a scanner principal
+// on the resolver. Malformed or empty entries are skipped with a warning so a
+// single bad entry does not prevent the service from starting.
+func registerScannerKeys(resolver *auth.APIKeyResolver, raw string) {
+	if raw == "" {
+		return
+	}
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		parts := strings.SplitN(entry, ":", 3)
+		if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+			log.Printf("api: ignoring malformed SCANNER_API_KEY entry (want key:tenantID:principalID)")
+			continue
+		}
+		key, tenantID, principalID := parts[0], parts[1], parts[2]
+		resolver.Register(key, auth.Principal{
+			ID:       principalID,
+			TenantID: tenantID,
+			Roles:    []domain.Role{domain.RoleScanner},
+		})
+		log.Printf("api: registered scanner API key for tenant %s principal %s", tenantID, principalID)
 	}
 }
 

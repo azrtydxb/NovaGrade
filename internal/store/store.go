@@ -241,6 +241,13 @@ func (s *Store) SetSourcePDFKey(ctx context.Context, id uuid.UUID, key string) e
 }
 
 // GetSubmission retrieves a single submission by primary key.
+//
+// TODO(phase2): SQL-level tenant filter. This lookup is by primary key only;
+// every current caller checks the tenant handler-side (and the orchestrator
+// validates env.TenantID against sub.TenantID). A defense-in-depth
+// GetSubmissionForTenant that filters by tenant_id in the WHERE clause should be
+// added so a tenant can never read another tenant's row even if a handler check
+// is forgotten.
 func (s *Store) GetSubmission(ctx context.Context, id uuid.UUID) (Submission, error) {
 	row, err := s.queries.GetSubmission(ctx, id)
 	if err != nil {

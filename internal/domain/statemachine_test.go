@@ -24,9 +24,6 @@ func TestNextState_StageSucceeded_Pipeline(t *testing.T) {
 		{contracts.StateSplittingPages, contracts.StateExtractingMetadata},
 		{contracts.StateExtractingMetadata, contracts.StateTranscribing},
 		{contracts.StateGrading, contracts.StateTeacherReview},
-		{contracts.StateTeacherReview, contracts.StateApproved},
-		{contracts.StateApproved, contracts.StatePublished},
-		{contracts.StatePublished, contracts.StateExported},
 	}
 	for _, c := range cases {
 		t.Run(string(c.from)+"->"+string(c.to), func(t *testing.T) {
@@ -35,6 +32,42 @@ func TestNextState_StageSucceeded_Pipeline(t *testing.T) {
 			assert.Equal(t, c.to, next)
 		})
 	}
+}
+
+// FIX 1: a stage-result event (EventStageSucceeded) must NEVER advance a
+// submission out of teacher_review. A re-delivered grade.result for a submission
+// already parked in teacher_review computes teacher_review (a no-op), NOT
+// approved — so the orchestrator's idempotency guard skips the write/dispatch and
+// the approval gate cannot be crossed by message re-delivery.
+func TestNextState_StageSucceeded_TeacherReviewIsHardStop(t *testing.T) {
+	next, err := domain.NextState(contracts.StateTeacherReview, domain.EventStageSucceeded, nil)
+	require.NoError(t, err)
+	assert.Equal(t, contracts.StateTeacherReview, next,
+		"StageSucceeded must NOT auto-advance teacher_review past the approval gate")
+}
+
+// FIX 1: crossing the approval gate and the edges past it is possible ONLY via
+// the explicit teacher/admin command events — never via a bare stage result.
+func TestNextState_ApprovalGate_ExplicitCommandsOnly(t *testing.T) {
+	// approved is reachable ONLY via EventApproveByTeacher.
+	next, err := domain.NextState(contracts.StateTeacherReview, domain.EventApproveByTeacher, nil)
+	require.NoError(t, err)
+	assert.Equal(t, contracts.StateApproved, next)
+
+	// published is reachable ONLY via EventPublish.
+	next, err = domain.NextState(contracts.StateApproved, domain.EventPublish, nil)
+	require.NoError(t, err)
+	assert.Equal(t, contracts.StatePublished, next)
+
+	// exported is reachable ONLY via EventExport.
+	next, err = domain.NextState(contracts.StatePublished, domain.EventExport, nil)
+	require.NoError(t, err)
+	assert.Equal(t, contracts.StateExported, next)
+
+	// A stage result from approved can no longer reach published: approved has no
+	// StageSucceeded edge anymore, so it errors instead of silently advancing.
+	_, err = domain.NextState(contracts.StateApproved, domain.EventStageSucceeded, nil)
+	require.Error(t, err)
 }
 
 func TestNextState_TranscribingClean_GoesToGrading(t *testing.T) {

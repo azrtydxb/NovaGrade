@@ -20,6 +20,15 @@ const (
 	EventStageSucceeded    Event = "StageSucceeded"
 	EventStageFailed       Event = "StageFailed"
 	EventFlaggedForReview  Event = "FlaggedForReview"
+
+	// Explicit teacher/admin COMMAND events. These are the ONLY way to cross the
+	// teacher-approval gate and the publish/export edges that follow it. A bare
+	// stage-result (EventStageSucceeded) must NEVER trigger these — that would
+	// finalize a grade with no human action. (Phase 2 wires these to HTTP routes;
+	// for now they exist in the machine but are not yet bound to a route.)
+	EventApproveByTeacher Event = "ApproveByTeacher" // teacher_review → approved
+	EventPublish          Event = "Publish"          // approved → published
+	EventExport           Event = "Export"           // published → exported
 )
 
 // QualityFlag is a flag set when transcription quality is suspect.
@@ -101,6 +110,25 @@ func computeNext(cur contracts.SubmissionState, ev Event, flags []QualityFlag) (
 		}
 		return cur, fmt.Errorf("domain: EventApproveForGrading invalid from state %s", cur)
 
+	case EventApproveByTeacher:
+		// The sole trigger for crossing the teacher-approval gate.
+		if cur == contracts.StateTeacherReview {
+			return contracts.StateApproved, nil
+		}
+		return cur, fmt.Errorf("domain: EventApproveByTeacher invalid from state %s", cur)
+
+	case EventPublish:
+		if cur == contracts.StateApproved {
+			return contracts.StatePublished, nil
+		}
+		return cur, fmt.Errorf("domain: EventPublish invalid from state %s", cur)
+
+	case EventExport:
+		if cur == contracts.StatePublished {
+			return contracts.StateExported, nil
+		}
+		return cur, fmt.Errorf("domain: EventExport invalid from state %s", cur)
+
 	default:
 		return cur, fmt.Errorf("domain: unknown event %q", ev)
 	}
@@ -124,11 +152,12 @@ func stageSucceededNext(cur contracts.SubmissionState, flags []QualityFlag) (con
 	case contracts.StateGrading:
 		return contracts.StateTeacherReview, nil
 	case contracts.StateTeacherReview:
-		return contracts.StateApproved, nil
-	case contracts.StateApproved:
-		return contracts.StatePublished, nil
-	case contracts.StatePublished:
-		return contracts.StateExported, nil
+		// HARD STOP at the teacher-approval gate. A stage-result event must NEVER
+		// auto-advance out of teacher_review — only an explicit EventApproveByTeacher
+		// command may. Returning teacher_review unchanged makes a re-delivered
+		// grade.result an idempotent no-op (no state write, no dispatch) instead of
+		// silently crossing the gate to approved.
+		return contracts.StateTeacherReview, nil
 	}
 	return cur, fmt.Errorf("domain: EventStageSucceeded invalid from state %s", cur)
 }

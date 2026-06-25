@@ -92,6 +92,11 @@ func (a *fakeArtifacts) Get(_ context.Context, bucket, key string) ([]byte, erro
 
 const testBucket = "submissions"
 
+// testTenant is the tenant UUID shared by the fake submission row and the
+// envelopes the tests publish. The orchestrator's tenant-match guard compares
+// env.TenantID against sub.TenantID, so both must agree for the happy paths.
+var testTenant = uuid.MustParse("11111111-1111-1111-1111-111111111111")
+
 func mustFlags(t *testing.T, tf domain.TranscribeFlags) []byte {
 	t.Helper()
 	b, err := json.Marshal(tf)
@@ -103,7 +108,7 @@ func mustFlags(t *testing.T, tf domain.TranscribeFlags) []byte {
 
 func transcribeResultEnv(subID uuid.UUID, payloadRef string) contracts.Envelope {
 	return contracts.Envelope{
-		TenantID:     "tenant-1",
+		TenantID:     testTenant.String(),
 		SubmissionID: subID.String(),
 		Stage:        contracts.StageTranscribeResult,
 		PayloadRef:   payloadRef,
@@ -128,7 +133,7 @@ func TestHandleEnvelope_CleanTranscript_AdvancesToGrading(t *testing.T) {
 		ChecksumOK:        true,
 	}
 
-	st := &fakeStore{sub: store.Submission{ID: subID, State: contracts.StateTranscribing}}
+	st := &fakeStore{sub: store.Submission{ID: subID, TenantID: testTenant, State: contracts.StateTranscribing}}
 	bus := &fakeBus{}
 	art := &fakeArtifacts{objects: map[string][]byte{
 		testBucket + "/" + key: mustFlags(t, clean),
@@ -173,7 +178,7 @@ func TestHandleEnvelope_GateTripped_RequiresReview(t *testing.T) {
 		ChecksumOK:        true,
 	}
 
-	st := &fakeStore{sub: store.Submission{ID: subID, State: contracts.StateTranscribing}}
+	st := &fakeStore{sub: store.Submission{ID: subID, TenantID: testTenant, State: contracts.StateTranscribing}}
 	bus := &fakeBus{}
 	art := &fakeArtifacts{objects: map[string][]byte{
 		testBucket + "/" + key: mustFlags(t, flagged),
@@ -207,13 +212,13 @@ func TestHandleEnvelope_Redelivery_NoDoubleDispatch(t *testing.T) {
 
 	// Submission has ALREADY advanced to queued; the re-delivered submit is a
 	// no-op (queued → queued).
-	st := &fakeStore{sub: store.Submission{ID: subID, State: contracts.StateQueued}}
+	st := &fakeStore{sub: store.Submission{ID: subID, TenantID: testTenant, State: contracts.StateQueued}}
 	bus := &fakeBus{}
 	art := &fakeArtifacts{objects: map[string][]byte{}}
 	o := NewOrchestrator(st, bus, art, testBucket)
 
 	env := contracts.Envelope{
-		TenantID:     "tenant-1",
+		TenantID:     testTenant.String(),
 		SubmissionID: subID.String(),
 		Stage:        "submit",
 	}
@@ -234,13 +239,13 @@ func TestHandleEnvelope_Redelivery_NoDoubleDispatch(t *testing.T) {
 func TestDLQHandler_TranscribeFailure_MarksFailed(t *testing.T) {
 	subID := uuid.New()
 
-	st := &fakeStore{sub: store.Submission{ID: subID, State: contracts.StateTranscribing}}
+	st := &fakeStore{sub: store.Submission{ID: subID, TenantID: testTenant, State: contracts.StateTranscribing}}
 	bus := &fakeBus{}
 	art := &fakeArtifacts{objects: map[string][]byte{}}
 	o := NewOrchestrator(st, bus, art, testBucket)
 
 	env := contracts.Envelope{
-		TenantID:     "tenant-1",
+		TenantID:     testTenant.String(),
 		SubmissionID: subID.String(),
 		Stage:        contracts.StageTranscribe,
 		PayloadRef:   "tenant-1/" + subID.String() + "/render-result.json",
@@ -279,7 +284,7 @@ func TestHandleEnvelope_MissingSidecar_Errors(t *testing.T) {
 	subID := uuid.New()
 	key := "tenant-1/" + subID.String() + "/transcribe-result.json"
 
-	st := &fakeStore{sub: store.Submission{ID: subID, State: contracts.StateTranscribing}}
+	st := &fakeStore{sub: store.Submission{ID: subID, TenantID: testTenant, State: contracts.StateTranscribing}}
 	bus := &fakeBus{}
 	art := &fakeArtifacts{objects: map[string][]byte{}} // sidecar absent
 	o := NewOrchestrator(st, bus, art, testBucket)
@@ -293,5 +298,68 @@ func TestHandleEnvelope_MissingSidecar_Errors(t *testing.T) {
 	}
 	if len(st.setStateCalls) != 0 || len(bus.published) != 0 {
 		t.Fatalf("must not write state or dispatch on fetch failure")
+	}
+}
+
+// FIX 1 (gate regression): a re-delivered grade.result for a submission ALREADY
+// in teacher_review must NOT cross the approval gate. NextState(teacher_review,
+// StageSucceeded) is now a no-op (teacher_review), so the orchestrator writes
+// state ZERO times and dispatches ZERO messages — the gate cannot be crossed by
+// message re-delivery; only an explicit teacher approval command may.
+func TestHandleEnvelope_GradeResultRedelivered_DoesNotCrossApprovalGate(t *testing.T) {
+	subID := uuid.New()
+
+	st := &fakeStore{sub: store.Submission{ID: subID, TenantID: testTenant, State: contracts.StateTeacherReview}}
+	bus := &fakeBus{}
+	art := &fakeArtifacts{objects: map[string][]byte{}}
+	o := NewOrchestrator(st, bus, art, testBucket)
+
+	env := contracts.Envelope{
+		TenantID:     testTenant.String(),
+		SubmissionID: subID.String(),
+		Stage:        contracts.StageGradeResult,
+	}
+	if err := o.HandleEnvelope(env); err != nil {
+		t.Fatalf("HandleEnvelope: %v", err)
+	}
+
+	if len(st.setStateCalls) != 0 {
+		t.Fatalf("want 0 SetSubmissionState calls (gate not crossed), got %d: %v", len(st.setStateCalls), st.setStateCalls)
+	}
+	if len(bus.published) != 0 {
+		t.Fatalf("want 0 dispatches (gate not crossed), got %d: %+v", len(bus.published), bus.published)
+	}
+	if st.sub.State != contracts.StateTeacherReview {
+		t.Fatalf("want submission still in teacher_review, got %s", st.sub.State)
+	}
+}
+
+// FIX 3: an envelope whose TenantID does not match the persisted submission's
+// tenant is dropped without transitioning state — no state write, no dispatch.
+func TestHandleEnvelope_TenantMismatch_NoStateChangeNoDispatch(t *testing.T) {
+	subID := uuid.New()
+
+	st := &fakeStore{sub: store.Submission{ID: subID, TenantID: testTenant, State: contracts.StateTranscribing}}
+	bus := &fakeBus{}
+	art := &fakeArtifacts{objects: map[string][]byte{}}
+	o := NewOrchestrator(st, bus, art, testBucket)
+
+	// Envelope claims a DIFFERENT tenant than the persisted submission row.
+	otherTenant := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	env := contracts.Envelope{
+		TenantID:     otherTenant.String(),
+		SubmissionID: subID.String(),
+		Stage:        contracts.StageTranscribeResult,
+		PayloadRef:   "x/" + subID.String() + "/transcribe-result.json",
+	}
+	if err := o.HandleEnvelope(env); err != nil {
+		t.Fatalf("HandleEnvelope should drop (ack) on tenant mismatch, got err: %v", err)
+	}
+
+	if len(st.setStateCalls) != 0 {
+		t.Fatalf("want 0 SetSubmissionState calls on tenant mismatch, got %d: %v", len(st.setStateCalls), st.setStateCalls)
+	}
+	if len(bus.published) != 0 {
+		t.Fatalf("want 0 dispatches on tenant mismatch, got %d: %+v", len(bus.published), bus.published)
 	}
 }
