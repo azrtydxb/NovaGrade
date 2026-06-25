@@ -18,6 +18,7 @@ type Envelope struct {
 
 // Command event types — used in the Stage field to indicate the work to perform.
 const (
+	StageSubmitExam string = "submit_exam"
 	StageRender     string = "render"
 	StageTranscribe string = "transcribe"
 	StageGrade      string = "grade"

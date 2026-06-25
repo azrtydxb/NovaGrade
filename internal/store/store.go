@@ -207,6 +207,60 @@ func (s *Store) FailSubmission(ctx context.Context, id uuid.UUID, stage, detail 
 	return nil
 }
 
+// ListSubmissionsByState returns submissions for a tenant, optionally filtered by state.
+// Pass an empty string to return all submissions for the tenant.
+func (s *Store) ListSubmissionsByState(ctx context.Context, tenantID uuid.UUID, state contracts.SubmissionState) ([]Submission, error) {
+	query := `SELECT id, tenant_id, assessment_version_id, student_id, state, current_stage, attempt, error_detail, source_pdf_key, transcript_key, graded_key, created_at, updated_at FROM submission WHERE tenant_id = $1`
+	args := []any{tenantID}
+	if state != "" {
+		query += " AND state = $2 ORDER BY created_at DESC"
+		args = append(args, string(state))
+	} else {
+		query += " ORDER BY created_at DESC"
+	}
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store: ListSubmissionsByState: %w", err)
+	}
+	defer rows.Close()
+	var result []Submission
+	for rows.Next() {
+		var sub Submission
+		var assessmentVersionID uuid.NullUUID
+		var studentID uuid.NullUUID
+		var stateStr string
+		var currentStage pgtype.Text
+		var attempt int32
+		var errorDetail pgtype.Text
+		var sourcePDFKey pgtype.Text
+		var transcriptKey pgtype.Text
+		var gradedKey pgtype.Text
+		var createdAt pgtype.Timestamptz
+		var updatedAt pgtype.Timestamptz
+		err := rows.Scan(
+			&sub.ID, &sub.TenantID, &assessmentVersionID, &studentID,
+			&stateStr, &currentStage, &attempt, &errorDetail,
+			&sourcePDFKey, &transcriptKey, &gradedKey, &createdAt, &updatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("store: ListSubmissionsByState scan: %w", err)
+		}
+		sub.State = contracts.SubmissionState(stateStr)
+		sub.AssessmentVersionID = nullUUIDToPtr(assessmentVersionID)
+		sub.StudentID = nullUUIDToPtr(studentID)
+		sub.CurrentStage = pgtypeTextToPtr(currentStage)
+		sub.Attempt = int(attempt)
+		sub.ErrorDetail = pgtypeTextToPtr(errorDetail)
+		sub.SourcePDFKey = pgtypeTextToPtr(sourcePDFKey)
+		sub.TranscriptKey = pgtypeTextToPtr(transcriptKey)
+		sub.GradedKey = pgtypeTextToPtr(gradedKey)
+		sub.CreatedAt = createdAt.Time
+		sub.UpdatedAt = updatedAt.Time
+		result = append(result, sub)
+	}
+	return result, rows.Err()
+}
+
 // GetSubmission retrieves a single submission by primary key.
 func (s *Store) GetSubmission(ctx context.Context, id uuid.UUID) (Submission, error) {
 	row, err := s.queries.GetSubmission(ctx, id)
