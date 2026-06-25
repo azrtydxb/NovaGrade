@@ -570,3 +570,180 @@ func TestAPIKey_Resolve(t *testing.T) {
 	_, err = resolver.Resolve("wrong-key")
 	assert.ErrorIs(t, err, auth.ErrUnauthorized)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Additional tests written for TDD completeness: define expected behaviour for
+// scanner forbidden, operator cross-tenant (saas vs onprem), and unauthenticated
+// access to GET endpoints.
+// Tests written per TDD: written to define expected behaviour before
+// implementation was finalised.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestGetResult_ScannerForbidden verifies that a scanner (which only has
+// SubmitExam permission) receives 403 when attempting to view results.
+func TestGetResult_ScannerForbidden(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeStore := NewFakeStore()
+	fakeObjects := NewFakeObjectStore()
+	h := &api.Handlers{
+		Store:      fakeStore,
+		Bus:        &FakeBus{},
+		Objects:    fakeObjects,
+		DeployMode: "onprem",
+	}
+	resolver := auth.NewAPIKeyResolver()
+	scanner := auth.Principal{
+		ID:       "scanner-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleScanner},
+	}
+	resolver.Register("scanner-key", scanner)
+	router := buildRouter(t, h, resolver)
+
+	// Create a submission in approved state so result would be available
+	sub, err := fakeStore.CreateSubmission(context.Background(), store.CreateSubmissionParams{
+		TenantID: tenantID,
+	})
+	require.NoError(t, err)
+	fakeStore.SetState(sub.ID, contracts.StateApproved)
+
+	// Store a graded result
+	gradedKey := fmt.Sprintf("%s/%s/graded.v1.json", tenantID, sub.ID)
+	require.NoError(t, fakeObjects.PutObject(context.Background(), gradedKey, []byte(`{"score":90}`)))
+
+	// Scanner requests result — should be 403 (forbidden, not 401 since authenticated)
+	req := httptest.NewRequest(http.MethodGet, "/v1/submissions/"+sub.ID.String()+"/result", nil)
+	req.Header.Set("X-API-Key", "scanner-key")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	// Scanner has SubmitExam only, NOT ViewResults → forbidden (returned as 404 to avoid enumeration)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// TestGetSubmission_OperatorCrossTenant_SaaS verifies that an operator from
+// tenantA can read a submission belonging to tenantB when DEPLOY_MODE=saas.
+func TestGetSubmission_OperatorCrossTenant_SaaS(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+	fakeStore := NewFakeStore()
+	h := &api.Handlers{
+		Store:      fakeStore,
+		Bus:        &FakeBus{},
+		Objects:    NewFakeObjectStore(),
+		DeployMode: "saas",
+	}
+	resolver := auth.NewAPIKeyResolver()
+	router := buildRouter(t, h, resolver)
+
+	// Submission belongs to tenantB
+	sub, err := fakeStore.CreateSubmission(context.Background(), store.CreateSubmissionParams{
+		TenantID: tenantB,
+	})
+	require.NoError(t, err)
+
+	// Operator from tenantA — in saas mode cross-tenant access is allowed
+	principal := auth.Principal{
+		ID:       "operator-a",
+		TenantID: tenantA.String(),
+		Roles:    []domain.Role{domain.RoleOperator},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/submissions/"+sub.ID.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// TestGetSubmission_OperatorCrossTenant_OnPrem verifies that an operator from
+// tenantA cannot read a submission belonging to tenantB when DEPLOY_MODE=onprem.
+func TestGetSubmission_OperatorCrossTenant_OnPrem(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+	fakeStore := NewFakeStore()
+	h := &api.Handlers{
+		Store:      fakeStore,
+		Bus:        &FakeBus{},
+		Objects:    NewFakeObjectStore(),
+		DeployMode: "onprem",
+	}
+	resolver := auth.NewAPIKeyResolver()
+	router := buildRouter(t, h, resolver)
+
+	// Submission belongs to tenantB
+	sub, err := fakeStore.CreateSubmission(context.Background(), store.CreateSubmissionParams{
+		TenantID: tenantB,
+	})
+	require.NoError(t, err)
+
+	// Operator from tenantA — in onprem mode cross-tenant access is denied
+	principal := auth.Principal{
+		ID:       "operator-a",
+		TenantID: tenantA.String(),
+		Roles:    []domain.Role{domain.RoleOperator},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/submissions/"+sub.ID.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	// Cross-tenant denied in onprem → 404 (not 403 to avoid enumeration)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// TestGetSubmission_Unauthenticated verifies that GET /v1/submissions/{id}
+// returns 401 when no credentials are provided.
+func TestGetSubmission_Unauthenticated(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	fakeStore := NewFakeStore()
+	h := &api.Handlers{
+		Store:      fakeStore,
+		Bus:        &FakeBus{},
+		Objects:    NewFakeObjectStore(),
+		DeployMode: "onprem",
+	}
+	resolver := auth.NewAPIKeyResolver()
+	router := buildRouter(t, h, resolver)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/submissions/"+uuid.New().String(), nil)
+	// No Authorization header, no X-API-Key
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// TestGetResult_Unauthenticated verifies that GET /v1/submissions/{id}/result
+// returns 401 when no credentials are provided.
+func TestGetResult_Unauthenticated(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	fakeStore := NewFakeStore()
+	h := &api.Handlers{
+		Store:      fakeStore,
+		Bus:        &FakeBus{},
+		Objects:    NewFakeObjectStore(),
+		DeployMode: "onprem",
+	}
+	resolver := auth.NewAPIKeyResolver()
+	router := buildRouter(t, h, resolver)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/submissions/"+uuid.New().String()+"/result", nil)
+	// No Authorization header, no X-API-Key
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
