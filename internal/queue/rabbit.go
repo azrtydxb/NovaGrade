@@ -26,11 +26,14 @@ var workQueues = []string{
 	"results.q",
 }
 
-// Bus wraps an AMQP connection and channel, providing Publish / Consume
-// helpers with manual acknowledgement and dead-letter routing.
+// Bus wraps an AMQP connection, providing Publish / Consume helpers with
+// manual acknowledgement and dead-letter routing.
+//
+// Each call to Publish, DeclareTopology, and Consume opens its own dedicated
+// AMQP channel, which is required because amqp091-go channels are not safe
+// for concurrent use across goroutines.
 type Bus struct {
 	conn *amqp.Connection
-	ch   *amqp.Channel
 
 	// MaxAttempts is the number of delivery attempts before a message is
 	// nack'd with requeue=false and routed to the DLQ.  Defaults to 3.
@@ -42,37 +45,27 @@ type Bus struct {
 	redeliveryCount map[string]int
 }
 
-// Connect dials the AMQP server at url, opens a channel, and returns a
-// ready-to-use *Bus.  Call DeclareTopology before Publish / Consume.
+// Connect dials the AMQP server at url and returns a ready-to-use *Bus.
+// Call DeclareTopology before Publish / Consume.
 func Connect(url string) (*Bus, error) {
 	conn, err := amqp.Dial(url)
 	if err != nil {
 		return nil, fmt.Errorf("queue: dial %s: %w", url, err)
 	}
-	ch, err := conn.Channel()
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("queue: open channel: %w", err)
-	}
 	return &Bus{
 		conn:            conn,
-		ch:              ch,
 		MaxAttempts:     3,
 		redeliveryCount: make(map[string]int),
 	}, nil
 }
 
-// Close releases the AMQP channel then the connection.
+// Close releases the AMQP connection.
 func (b *Bus) Close() error {
-	chErr := b.ch.Close()
-	connErr := b.conn.Close()
-	if chErr != nil {
-		return chErr
-	}
-	return connErr
+	return b.conn.Close()
 }
 
 // DeclareTopology declares the six work queues and their companion DLQs.
+// It opens a temporary channel for the declarations and closes it on return.
 //
 // Queue type choice: we use x-queue-type = "classic" rather than "quorum"
 // because testcontainers typically starts a single-node RabbitMQ instance,
@@ -80,11 +73,17 @@ func (b *Bus) Close() error {
 // unreliable in ephemeral single-node environments.  Classic queues work
 // correctly in both single-node and clustered deployments.
 func (b *Bus) DeclareTopology() error {
+	ch, err := b.conn.Channel()
+	if err != nil {
+		return fmt.Errorf("queue: open channel for topology: %w", err)
+	}
+	defer ch.Close()
+
 	for _, q := range workQueues {
 		dlq := q + ".dlq"
 
 		// Declare the DLQ first (plain durable queue, no special args).
-		if _, err := b.ch.QueueDeclare(dlq, true, false, false, false, nil); err != nil {
+		if _, err := ch.QueueDeclare(dlq, true, false, false, false, nil); err != nil {
 			return fmt.Errorf("queue: declare DLQ %s: %w", dlq, err)
 		}
 
@@ -95,7 +94,7 @@ func (b *Bus) DeclareTopology() error {
 			"x-dead-letter-routing-key": dlq,
 			"x-queue-type":              "classic",
 		}
-		if _, err := b.ch.QueueDeclare(q, true, false, false, false, args); err != nil {
+		if _, err := ch.QueueDeclare(q, true, false, false, false, args); err != nil {
 			return fmt.Errorf("queue: declare %s: %w", q, err)
 		}
 	}
@@ -105,7 +104,16 @@ func (b *Bus) DeclareTopology() error {
 // Publish JSON-marshals env and publishes it to queue via the default
 // exchange with persistent delivery mode.  A UUID MessageId is set so that
 // the in-memory redelivery counter in Consume can key on a stable value.
+//
+// A fresh channel is opened for each Publish call and closed before returning,
+// ensuring goroutine safety without shared channel state.
 func (b *Bus) Publish(ctx context.Context, queue string, env contracts.Envelope) error {
+	ch, err := b.conn.Channel()
+	if err != nil {
+		return fmt.Errorf("queue: open channel for publish: %w", err)
+	}
+	defer ch.Close()
+
 	body, err := json.Marshal(env)
 	if err != nil {
 		return fmt.Errorf("queue: marshal envelope: %w", err)
@@ -117,7 +125,7 @@ func (b *Bus) Publish(ctx context.Context, queue string, env contracts.Envelope)
 		MessageId:    msgID,
 		Body:         body,
 	}
-	if err := b.ch.PublishWithContext(ctx, "", queue, false, false, msg); err != nil {
+	if err := ch.PublishWithContext(ctx, "", queue, false, false, msg); err != nil {
 		return fmt.Errorf("queue: publish to %s: %w", queue, err)
 	}
 	return nil
@@ -131,10 +139,19 @@ func (b *Bus) Publish(ctx context.Context, queue string, env contracts.Envelope)
 //   - once MaxAttempts is reached the message is discarded to the DLQ
 //     (requeue=false, routed by x-dead-letter-routing-key).
 //
+// Each call to Consume opens its own dedicated AMQP channel, making
+// concurrent Consume calls goroutine-safe.
+//
 // Consume launches a goroutine and returns immediately (non-blocking).
-// The goroutine exits when the delivery channel closes or ctx is cancelled.
+// The goroutine exits when the delivery channel closes or ctx is cancelled,
+// and closes its AMQP channel on exit.
 func (b *Bus) Consume(ctx context.Context, queue string, handler func(contracts.Envelope) error) error {
-	deliveries, err := b.ch.Consume(
+	ch, err := b.conn.Channel()
+	if err != nil {
+		return fmt.Errorf("queue: open channel for consume %s: %w", queue, err)
+	}
+
+	deliveries, err := ch.Consume(
 		queue,
 		"",    // server-generated consumer tag
 		false, // autoAck=false: manual acknowledgement
@@ -144,10 +161,12 @@ func (b *Bus) Consume(ctx context.Context, queue string, handler func(contracts.
 		nil,
 	)
 	if err != nil {
+		ch.Close()
 		return fmt.Errorf("queue: consume %s: %w", queue, err)
 	}
 
 	go func() {
+		defer ch.Close()
 		for {
 			select {
 			case <-ctx.Done():
