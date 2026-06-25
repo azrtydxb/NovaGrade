@@ -89,6 +89,7 @@ func main() {
 	// ── Handler ───────────────────────────────────────────────────────────────
 	h := &api.AuditHandlers{
 		Audit:      auditSvc,
+		Store:      st, // used to verify submission existence and ownership
 		DeployMode: getenv("DEPLOY_MODE", "onprem"),
 	}
 

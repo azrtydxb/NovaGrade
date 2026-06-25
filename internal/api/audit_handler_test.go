@@ -63,6 +63,43 @@ func (f *fakeAuditSvc) seed(tenantID, submissionID uuid.UUID, action string) sto
 	return ev
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Fake submission lookup for HTTP handler tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+// fakeSubmissionLookup implements api.SubmissionLookup backed by an in-memory map.
+type fakeSubmissionLookup struct {
+	mu          sync.Mutex
+	submissions map[uuid.UUID]store.Submission
+}
+
+func newFakeSubmissionLookup() *fakeSubmissionLookup {
+	return &fakeSubmissionLookup{
+		submissions: make(map[uuid.UUID]store.Submission),
+	}
+}
+
+func (f *fakeSubmissionLookup) GetSubmission(_ context.Context, id uuid.UUID) (store.Submission, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	sub, ok := f.submissions[id]
+	if !ok {
+		return store.Submission{}, store.ErrNotFound
+	}
+	return sub, nil
+}
+
+func (f *fakeSubmissionLookup) seed(tenantID, submissionID uuid.UUID) store.Submission {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	sub := store.Submission{
+		ID:       submissionID,
+		TenantID: tenantID,
+	}
+	f.submissions[submissionID] = sub
+	return sub
+}
+
 // buildAuditRouter wires the audit endpoint into a chi router with auth middleware.
 func buildAuditRouter(t *testing.T, h *api.AuditHandlers, resolver *auth.APIKeyResolver) http.Handler {
 	t.Helper()
@@ -87,7 +124,10 @@ func TestGetAuditEvents_OK(t *testing.T) {
 	svc := &fakeAuditSvc{}
 	ev := svc.seed(tenantID, subID, "override")
 
-	h := &api.AuditHandlers{Audit: svc, DeployMode: "onprem"}
+	subLookup := newFakeSubmissionLookup()
+	subLookup.seed(tenantID, subID)
+
+	h := &api.AuditHandlers{Audit: svc, Store: subLookup, DeployMode: "onprem"}
 	router := buildAuditRouter(t, h, auth.NewAPIKeyResolver())
 
 	principal := auth.Principal{
@@ -111,14 +151,19 @@ func TestGetAuditEvents_OK(t *testing.T) {
 }
 
 // TestGetAuditEvents_Empty verifies that a 200 with an empty array is returned
-// when there are no audit events for the submission.
+// when the submission exists in the caller's tenant but has no audit events.
 func TestGetAuditEvents_Empty(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
 	tenantID := uuid.New()
+	subID := uuid.New()
 
 	svc := &fakeAuditSvc{}
-	h := &api.AuditHandlers{Audit: svc, DeployMode: "onprem"}
+
+	subLookup := newFakeSubmissionLookup()
+	subLookup.seed(tenantID, subID) // submission exists, no audit events
+
+	h := &api.AuditHandlers{Audit: svc, Store: subLookup, DeployMode: "onprem"}
 	router := buildAuditRouter(t, h, auth.NewAPIKeyResolver())
 
 	principal := auth.Principal{
@@ -128,7 +173,7 @@ func TestGetAuditEvents_Empty(t *testing.T) {
 	}
 	tok := issueToken(t, principal)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/audit?submission="+uuid.New().String(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/audit?submission="+subID.String(), nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -140,7 +185,8 @@ func TestGetAuditEvents_Empty(t *testing.T) {
 }
 
 // TestGetAuditEvents_CrossTenant verifies tenant isolation: tenant B querying
-// a submission owned by tenant A receives an empty list (not a 4xx error).
+// a submission owned by tenant A receives 404 (not 200+[]) — the same
+// no-enumeration behaviour as GetSubmission.
 func TestGetAuditEvents_CrossTenant(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
@@ -151,7 +197,10 @@ func TestGetAuditEvents_CrossTenant(t *testing.T) {
 	svc := &fakeAuditSvc{}
 	svc.seed(tenantA, subA, "approve") // event belongs to tenantA
 
-	h := &api.AuditHandlers{Audit: svc, DeployMode: "onprem"}
+	subLookup := newFakeSubmissionLookup()
+	subLookup.seed(tenantA, subA) // submission belongs to tenantA
+
+	h := &api.AuditHandlers{Audit: svc, Store: subLookup, DeployMode: "onprem"}
 	router := buildAuditRouter(t, h, auth.NewAPIKeyResolver())
 
 	// Caller from tenantB queries subA.
@@ -167,18 +216,16 @@ func TestGetAuditEvents_CrossTenant(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	// 200 with empty array — the store filters by tenant so no events leak.
-	require.Equal(t, http.StatusOK, rec.Code)
-	var events []store.AuditEvent
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &events))
-	assert.Empty(t, events, "cross-tenant query must not return events from another tenant")
+	// 404 — cross-tenant request must not reveal that the submission exists or
+	// return any events. Matches the no-enumeration convention of GetSubmission.
+	assert.Equal(t, http.StatusNotFound, rec.Code, "cross-tenant query must return 404, not 200+[]")
 }
 
 // TestGetAuditEvents_Unauthorized verifies 401 when no credentials are provided.
 func TestGetAuditEvents_Unauthorized(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
-	h := &api.AuditHandlers{Audit: &fakeAuditSvc{}, DeployMode: "onprem"}
+	h := &api.AuditHandlers{Audit: &fakeAuditSvc{}, Store: newFakeSubmissionLookup(), DeployMode: "onprem"}
 	router := buildAuditRouter(t, h, auth.NewAPIKeyResolver())
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/audit?submission="+uuid.New().String(), nil)
@@ -188,12 +235,19 @@ func TestGetAuditEvents_Unauthorized(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
-// TestGetAuditEvents_Forbidden verifies 403 when the caller lacks ViewResults.
+// TestGetAuditEvents_Forbidden verifies that a caller who lacks ViewResults
+// receives 404 (not 403) — consistent with the no-enumeration convention used
+// by GetSubmission when RBAC denies access to a resource.
 func TestGetAuditEvents_Forbidden(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
 	tenantID := uuid.New()
-	h := &api.AuditHandlers{Audit: &fakeAuditSvc{}, DeployMode: "onprem"}
+	subID := uuid.New()
+
+	subLookup := newFakeSubmissionLookup()
+	subLookup.seed(tenantID, subID) // submission must exist so RBAC check is reached
+
+	h := &api.AuditHandlers{Audit: &fakeAuditSvc{}, Store: subLookup, DeployMode: "onprem"}
 	router := buildAuditRouter(t, h, auth.NewAPIKeyResolver())
 
 	// RoleScanner only has ActionSubmitExam, not ActionViewResults.
@@ -204,12 +258,13 @@ func TestGetAuditEvents_Forbidden(t *testing.T) {
 	}
 	tok := issueToken(t, principal)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/audit?submission="+uuid.New().String(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/audit?submission="+subID.String(), nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+	// 404 — RBAC denial surfaces as not-found (no-enumeration), matching GetSubmission.
+	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
 // TestGetAuditEvents_MissingSubmissionParam verifies 400 when the submission
@@ -218,7 +273,7 @@ func TestGetAuditEvents_MissingSubmissionParam(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
 	tenantID := uuid.New()
-	h := &api.AuditHandlers{Audit: &fakeAuditSvc{}, DeployMode: "onprem"}
+	h := &api.AuditHandlers{Audit: &fakeAuditSvc{}, Store: newFakeSubmissionLookup(), DeployMode: "onprem"}
 	router := buildAuditRouter(t, h, auth.NewAPIKeyResolver())
 
 	principal := auth.Principal{
@@ -242,7 +297,7 @@ func TestGetAuditEvents_InvalidSubmissionParam(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
 	tenantID := uuid.New()
-	h := &api.AuditHandlers{Audit: &fakeAuditSvc{}, DeployMode: "onprem"}
+	h := &api.AuditHandlers{Audit: &fakeAuditSvc{}, Store: newFakeSubmissionLookup(), DeployMode: "onprem"}
 	router := buildAuditRouter(t, h, auth.NewAPIKeyResolver())
 
 	principal := auth.Principal{
