@@ -8,7 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
+	"log"
 
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -38,11 +38,6 @@ type Bus struct {
 	// MaxAttempts is the number of delivery attempts before a message is
 	// nack'd with requeue=false and routed to the DLQ.  Defaults to 3.
 	MaxAttempts int
-
-	// redeliveryCount tracks in-process retry counts for classic queues,
-	// which do not carry x-delivery-count in the message headers.
-	mu              sync.Mutex
-	redeliveryCount map[string]int
 }
 
 // Connect dials the AMQP server at url and returns a ready-to-use *Bus.
@@ -53,9 +48,8 @@ func Connect(url string) (*Bus, error) {
 		return nil, fmt.Errorf("queue: dial %s: %w", url, err)
 	}
 	return &Bus{
-		conn:            conn,
-		MaxAttempts:     3,
-		redeliveryCount: make(map[string]int),
+		conn:        conn,
+		MaxAttempts: 3,
 	}, nil
 }
 
@@ -64,14 +58,12 @@ func (b *Bus) Close() error {
 	return b.conn.Close()
 }
 
-// DeclareTopology declares the six work queues and their companion DLQs.
-// It opens a temporary channel for the declarations and closes it on return.
+// DeclareTopology declares the six work queues (as quorum queues) and their
+// companion DLQs. Quorum queues are durable, replicated queues that carry the
+// x-delivery-count header on each delivery, enabling broker-native retry
+// accounting without any in-process state.
 //
-// Queue type choice: we use x-queue-type = "classic" rather than "quorum"
-// because testcontainers typically starts a single-node RabbitMQ instance,
-// and quorum queues require a quorum of nodes (≥3 for HA) which makes them
-// unreliable in ephemeral single-node environments.  Classic queues work
-// correctly in both single-node and clustered deployments.
+// It opens a temporary channel for the declarations and closes it on return.
 func (b *Bus) DeclareTopology() error {
 	ch, err := b.conn.Channel()
 	if err != nil {
@@ -87,12 +79,15 @@ func (b *Bus) DeclareTopology() error {
 			return fmt.Errorf("queue: declare DLQ %s: %w", dlq, err)
 		}
 
-		// Declare the work queue with dead-letter routing to the DLQ via the
-		// default exchange (empty string) and queue-type = classic.
+		// Declare the work queue as a quorum queue with dead-letter routing
+		// to the DLQ via the default exchange (empty string).
+		// Quorum queues populate x-delivery-count on each redelivery, which
+		// allows broker-native attempt counting across all consumer replicas
+		// and across restarts.
 		args := amqp.Table{
 			"x-dead-letter-exchange":    "",
 			"x-dead-letter-routing-key": dlq,
-			"x-queue-type":              "classic",
+			"x-queue-type":              "quorum",
 		}
 		if _, err := ch.QueueDeclare(q, true, false, false, false, args); err != nil {
 			return fmt.Errorf("queue: declare %s: %w", q, err)
@@ -102,8 +97,7 @@ func (b *Bus) DeclareTopology() error {
 }
 
 // Publish JSON-marshals env and publishes it to queue via the default
-// exchange with persistent delivery mode.  A UUID MessageId is set so that
-// the in-memory redelivery counter in Consume can key on a stable value.
+// exchange with persistent delivery mode.
 //
 // A fresh channel is opened for each Publish call and closed before returning,
 // ensuring goroutine safety without shared channel state.
@@ -133,14 +127,19 @@ func (b *Bus) Publish(ctx context.Context, queue string, env contracts.Envelope)
 
 // Consume registers a consumer on queue with manual acknowledgement.
 // handler is called for each delivery; on success the delivery is ack'd.
-// On handler error the delivery is nack'd:
-//   - if the attempt count has not reached MaxAttempts the message is
-//     requeued (requeue=true);
-//   - once MaxAttempts is reached the message is discarded to the DLQ
-//     (requeue=false, routed by x-dead-letter-routing-key).
+// On handler error the delivery is nack'd using the broker-native x-delivery-count
+// header (populated by quorum queues) to determine the attempt number:
+//   - if deliveryCount + 1 < MaxAttempts the message is requeued (requeue=true)
+//     so the broker redelivers it and increments x-delivery-count;
+//   - once deliveryCount + 1 >= MaxAttempts the message is nack'd with
+//     requeue=false, routing it to the DLQ via x-dead-letter-routing-key.
 //
-// Each call to Consume opens its own dedicated AMQP channel, making
-// concurrent Consume calls goroutine-safe.
+// On unmarshalable messages the delivery is nack'd immediately with requeue=false
+// (dead-letter, no retries).
+//
+// Each call to Consume opens its own dedicated AMQP channel and sets QoS
+// prefetch=1 so each consumer holds at most one unacked message at a time,
+// providing even load distribution and bounded redelivery spikes on crash.
 //
 // Consume launches a goroutine and returns immediately (non-blocking).
 // The goroutine exits when the delivery channel closes or ctx is cancelled,
@@ -149,6 +148,13 @@ func (b *Bus) Consume(ctx context.Context, queue string, handler func(contracts.
 	ch, err := b.conn.Channel()
 	if err != nil {
 		return fmt.Errorf("queue: open channel for consume %s: %w", queue, err)
+	}
+
+	// Set prefetch to 1: each consumer holds at most one unacked message,
+	// ensuring even load distribution across replicas.
+	if err := ch.Qos(1, 0, false); err != nil {
+		ch.Close()
+		return fmt.Errorf("queue: set QoS for consume %s: %w", queue, err)
 	}
 
 	deliveries, err := ch.Consume(
@@ -182,41 +188,65 @@ func (b *Bus) Consume(ctx context.Context, queue string, handler func(contracts.
 	return nil
 }
 
+// deliveryCount reads the x-delivery-count header from a quorum queue delivery.
+// Quorum queues set this to 0 on first delivery and increment it on each
+// redelivery. If the header is absent (e.g. DLQ consumers, classic queue
+// fallback), 0 is returned.
+func deliveryCount(d amqp.Delivery) int64 {
+	if d.Headers == nil {
+		return 0
+	}
+	v, ok := d.Headers["x-delivery-count"]
+	if !ok {
+		return 0
+	}
+	switch n := v.(type) {
+	case int32:
+		return int64(n)
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	case uint32:
+		return int64(n)
+	case uint64:
+		return int64(n)
+	}
+	return 0
+}
+
 // handleDelivery processes one AMQP delivery inside the consumer goroutine.
 func (b *Bus) handleDelivery(d amqp.Delivery, handler func(contracts.Envelope) error) {
 	var env contracts.Envelope
 	if err := json.Unmarshal(d.Body, &env); err != nil {
-		// Malformed message — send to DLQ immediately.
-		_ = d.Nack(false, false)
+		// Malformed message — send to DLQ immediately, no retries.
+		if err := d.Nack(false, false); err != nil {
+			log.Printf("queue: nack (unmarshal error) failed: %v", err)
+		}
 		return
 	}
 
 	if err := handler(env); err == nil {
-		_ = d.Ack(false)
+		if err := d.Ack(false); err != nil {
+			log.Printf("queue: ack failed: %v", err)
+		}
 		return
 	}
 
-	// Handler failed — determine attempt count.
-	// Classic queues do not populate x-delivery-count; we maintain an
-	// in-process counter keyed by MessageId.
-	count := b.incrementAttempt(d.MessageId)
-
-	if count >= b.MaxAttempts {
-		// Exceeded retry budget — route to DLQ.
-		b.mu.Lock()
-		delete(b.redeliveryCount, d.MessageId)
-		b.mu.Unlock()
-		_ = d.Nack(false, false)
+	// Handler failed — use broker-native x-delivery-count for attempt accounting.
+	// x-delivery-count is 0 on first delivery and increments on each redelivery,
+	// so the current attempt number is deliveryCount + 1.
+	count := deliveryCount(d)
+	if count+1 >= int64(b.MaxAttempts) {
+		// Exhausted retry budget — route to DLQ (requeue=false).
+		if err := d.Nack(false, false); err != nil {
+			log.Printf("queue: nack (dead-letter) failed: %v", err)
+		}
 	} else {
-		_ = d.Nack(false, true)
+		// Still have attempts remaining — requeue so broker redelivers and
+		// increments x-delivery-count.
+		if err := d.Nack(false, true); err != nil {
+			log.Printf("queue: nack (requeue) failed: %v", err)
+		}
 	}
-}
-
-// incrementAttempt atomically increments and returns the attempt count for
-// the given message ID.
-func (b *Bus) incrementAttempt(msgID string) int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.redeliveryCount[msgID]++
-	return b.redeliveryCount[msgID]
 }

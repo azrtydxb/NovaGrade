@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ func startRabbitMQ(t *testing.T) string {
 	}
 	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
+		// rabbitmq:3.13-management includes quorum queue support by default.
 		Image:        "rabbitmq:3.13",
 		ExposedPorts: []string{"5672/tcp"},
 		WaitingFor:   wait.ForListeningPort("5672/tcp").WithStartupTimeout(60 * time.Second),
@@ -93,14 +95,20 @@ func TestBus_DLQ(t *testing.T) {
 
 	require.NoError(t, bus.DeclareTopology())
 
-	bus.MaxAttempts = 2
+	const maxAttempts = 2
+	bus.MaxAttempts = maxAttempts
 
-	// Consume from render.q with a handler that always fails
+	// handlerCalls counts how many times the always-failing handler is invoked.
+	// Using atomic so it's safe from the consumer goroutine.
+	var handlerCalls atomic.Int64
+
+	// Consume from render.q with a handler that always fails.
 	require.NoError(t, bus.Consume(context.Background(), "render.q", func(env contracts.Envelope) error {
+		handlerCalls.Add(1)
 		return errors.New("simulated failure")
 	}))
 
-	// Publish one message
+	// Publish one message.
 	msg := contracts.Envelope{
 		TenantID:     "dlq-tenant",
 		SubmissionID: "dlq-sub",
@@ -108,7 +116,7 @@ func TestBus_DLQ(t *testing.T) {
 	}
 	require.NoError(t, bus.Publish(context.Background(), "render.q", msg))
 
-	// Wait for the message to land in render.q.dlq
+	// Wait for the message to land in render.q.dlq.
 	dlqReceived := make(chan contracts.Envelope, 1)
 	require.NoError(t, bus.Consume(context.Background(), "render.q.dlq", func(env contracts.Envelope) error {
 		dlqReceived <- env
@@ -119,7 +127,13 @@ func TestBus_DLQ(t *testing.T) {
 	case got := <-dlqReceived:
 		require.Equal(t, msg.TenantID, got.TenantID)
 		require.Equal(t, msg.SubmissionID, got.SubmissionID)
-	case <-time.After(10 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("timed out waiting for DLQ message")
 	}
+
+	// Pin the exact boundary: the handler must have been called exactly
+	// MaxAttempts times — no more (off-by-one would call it MaxAttempts+1),
+	// no less (premature dead-lettering).
+	require.Equal(t, int64(maxAttempts), handlerCalls.Load(),
+		"handler must be invoked exactly MaxAttempts times before dead-lettering")
 }
