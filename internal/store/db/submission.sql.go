@@ -62,6 +62,29 @@ func (q *Queries) CreateSubmission(ctx context.Context, arg CreateSubmissionPara
 	return i, err
 }
 
+const failSubmission = `-- name: FailSubmission :execrows
+UPDATE submission
+   SET state         = 'failed',
+       current_stage = $2,
+       error_detail  = $3,
+       updated_at    = now()
+ WHERE id = $1
+`
+
+type FailSubmissionParams struct {
+	ID           uuid.UUID
+	CurrentStage pgtype.Text
+	ErrorDetail  pgtype.Text
+}
+
+func (q *Queries) FailSubmission(ctx context.Context, arg FailSubmissionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, failSubmission, arg.ID, arg.CurrentStage, arg.ErrorDetail)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getSubmission = `-- name: GetSubmission :one
 SELECT
     id, tenant_id, assessment_version_id, student_id,

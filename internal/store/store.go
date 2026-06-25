@@ -189,6 +189,24 @@ func (s *Store) SetSubmissionState(ctx context.Context, id uuid.UUID, state cont
 	return nil
 }
 
+// FailSubmission marks the submission as failed, recording which stage failed
+// in current_stage and a human-readable reason in error_detail (and bumps
+// updated_at). It returns ErrNotFound when no row matched the given id.
+func (s *Store) FailSubmission(ctx context.Context, id uuid.UUID, stage, detail string) error {
+	n, err := s.queries.FailSubmission(ctx, db.FailSubmissionParams{
+		ID:           id,
+		CurrentStage: ptrStringToPgtypeText(&stage),
+		ErrorDetail:  ptrStringToPgtypeText(&detail),
+	})
+	if err != nil {
+		return fmt.Errorf("store: FailSubmission: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("store: FailSubmission %s: %w", id, ErrNotFound)
+	}
+	return nil
+}
+
 // GetSubmission retrieves a single submission by primary key.
 func (s *Store) GetSubmission(ctx context.Context, id uuid.UUID) (Submission, error) {
 	row, err := s.queries.GetSubmission(ctx, id)

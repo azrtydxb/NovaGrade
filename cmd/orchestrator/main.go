@@ -42,6 +42,7 @@ import (
 type SubmissionStore interface {
 	GetSubmission(ctx context.Context, id uuid.UUID) (store.Submission, error)
 	SetSubmissionState(ctx context.Context, id uuid.UUID, state contracts.SubmissionState) error
+	FailSubmission(ctx context.Context, id uuid.UUID, stage, detail string) error
 }
 
 // MessageBus is the messaging port used by the orchestrator.
@@ -51,24 +52,42 @@ type MessageBus interface {
 	MaxAttempts() int
 }
 
+// ArtifactStore is the object-store port used by the orchestrator to fetch
+// stage sidecars (e.g. the transcribe-result.json flags) referenced by an
+// envelope's PayloadRef. It is satisfied by *store.ObjStore.
+type ArtifactStore interface {
+	Get(ctx context.Context, bucket, key string) ([]byte, error)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Orchestrator
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Orchestrator drives the submission state machine in response to bus events.
 type Orchestrator struct {
-	store MessageBus // re-using MessageBus for bus operations
-	bus   MessageBus
-	db    SubmissionStore
+	bus    MessageBus
+	db     SubmissionStore
+	obj    ArtifactStore
+	bucket string
 }
 
-// NewOrchestrator creates an Orchestrator wired to the given store and bus.
-func NewOrchestrator(db SubmissionStore, bus MessageBus) *Orchestrator {
-	return &Orchestrator{db: db, bus: bus}
+// NewOrchestrator creates an Orchestrator wired to the given store, bus, and
+// object store. bucket is the object-store bucket that stage sidecars (e.g. the
+// transcribe-result.json flags) are written to.
+func NewOrchestrator(db SubmissionStore, bus MessageBus, obj ArtifactStore, bucket string) *Orchestrator {
+	return &Orchestrator{db: db, bus: bus, obj: obj, bucket: bucket}
 }
 
-// Start registers consumers on commands.q and results.q and blocks until ctx
-// is cancelled.
+// stageDLQs maps each stage dead-letter queue (declared by DeclareTopology) to
+// the stage label recorded in error_detail when a message lands there.
+var stageDLQs = map[string]string{
+	"render.q.dlq":     contracts.StageRender,
+	"transcribe.q.dlq": contracts.StageTranscribe,
+	"grade.q.dlq":      contracts.StageGrade,
+}
+
+// Start registers consumers on commands.q, results.q, and the per-stage DLQs,
+// then blocks until ctx is cancelled.
 func (o *Orchestrator) Start(ctx context.Context) error {
 	if err := o.bus.Consume(ctx, "commands.q", o.handleEnvelope); err != nil {
 		return fmt.Errorf("orchestrator: consume commands.q: %w", err)
@@ -76,8 +95,42 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 	if err := o.bus.Consume(ctx, "results.q", o.handleEnvelope); err != nil {
 		return fmt.Errorf("orchestrator: consume results.q: %w", err)
 	}
+
+	// Consume the stage dead-letter queues so technical failures that exhausted
+	// their retry budget are recorded as failed + error_detail.
+	for dlq, stage := range stageDLQs {
+		stage := stage // capture per-iteration
+		if err := o.bus.Consume(ctx, dlq, o.dlqHandler(stage)); err != nil {
+			return fmt.Errorf("orchestrator: consume %s: %w", dlq, err)
+		}
+	}
+
 	<-ctx.Done()
 	return ctx.Err()
+}
+
+// dlqHandler returns a handler that transitions a submission to failed and
+// persists which stage failed (plus any available reason) in error_detail.
+func (o *Orchestrator) dlqHandler(stage string) func(contracts.Envelope) error {
+	return func(env contracts.Envelope) error {
+		ctx := context.Background()
+
+		subID, err := uuid.Parse(env.SubmissionID)
+		if err != nil {
+			return fmt.Errorf("orchestrator: dlq %s: invalid submission_id %q: %w", stage, env.SubmissionID, err)
+		}
+
+		detail := fmt.Sprintf("stage %q failed after exhausting retries", stage)
+		if env.PayloadRef != "" {
+			detail = fmt.Sprintf("%s (payload_ref=%s)", detail, env.PayloadRef)
+		}
+
+		if err := o.db.FailSubmission(ctx, subID, stage, detail); err != nil {
+			return fmt.Errorf("orchestrator: dlq %s: FailSubmission %s: %w", stage, subID, err)
+		}
+		log.Printf("orchestrator: submission %s failed at stage %q (from DLQ)", subID, stage)
+		return nil
+	}
 }
 
 // handleEnvelope processes a single envelope from the bus.
@@ -94,18 +147,20 @@ func (o *Orchestrator) handleEnvelope(env contracts.Envelope) error {
 		return fmt.Errorf("orchestrator: get submission %s: %w", subID, err)
 	}
 
-	ev, err := stageToEvent(env.Stage, sub.Attempt, o.bus.MaxAttempts())
+	ev, err := stageToEvent(env.Stage)
 	if err != nil {
 		return fmt.Errorf("orchestrator: map stage %q to event: %w", env.Stage, err)
 	}
 
-	// Evaluate quality gates when handling a transcription result.
+	// Evaluate quality gates when handling a transcription result. The flags
+	// sidecar lives in object storage; env.PayloadRef is its key. A fetch or
+	// decode failure is fatal — the message nacks/retries/DLQs rather than
+	// being silently treated as a clean transcript.
 	var flags []domain.QualityFlag
 	if env.Stage == contracts.StageTranscribeResult {
-		flags, err = extractFlags(env.PayloadRef)
+		flags, err = o.transcribeFlags(ctx, env.PayloadRef)
 		if err != nil {
-			log.Printf("orchestrator: extractFlags warning (ignoring): %v", err)
-			// Non-fatal: treat as no flags rather than failing the message.
+			return fmt.Errorf("orchestrator: evaluate transcribe gates: %w", err)
 		}
 	}
 
@@ -114,11 +169,16 @@ func (o *Orchestrator) handleEnvelope(env contracts.Envelope) error {
 		return fmt.Errorf("orchestrator: NextState(%s, %s): %w", sub.State, ev, err)
 	}
 
+	// Idempotent no-op: the state did not advance (e.g. a re-delivered result
+	// for a submission already past this state). Skip BOTH the state write and
+	// the dispatch so re-delivery never duplicates downstream work.
+	if next == sub.State {
+		return nil
+	}
+
 	// Persist the new state.
-	if next != sub.State {
-		if err := o.db.SetSubmissionState(ctx, subID, next); err != nil {
-			return fmt.Errorf("orchestrator: SetSubmissionState: %w", err)
-		}
+	if err := o.db.SetSubmissionState(ctx, subID, next); err != nil {
+		return fmt.Errorf("orchestrator: SetSubmissionState: %w", err)
 	}
 
 	// Dispatch the next command (if any).
@@ -174,11 +234,12 @@ func (o *Orchestrator) dispatchNext(ctx context.Context, orig contracts.Envelope
 	return nil
 }
 
-// stageToEvent maps a contracts.Stage* constant to a domain.Event.
-// If the attempt count has reached the max, a StageFailed event is returned.
-func stageToEvent(stage string, attempt, maxAttempts int) (domain.Event, error) {
-	// For result events, check attempt budget first.
+// stageToEvent maps a contracts.Stage* constant (result event) or a command
+// verb (arriving on commands.q) to a domain.Event. Technical failures are not
+// mapped here — they are consumed from the per-stage DLQs (see dlqHandler).
+func stageToEvent(stage string) (domain.Event, error) {
 	switch stage {
+	// Result events that arrive on results.q.
 	case contracts.StageRenderResult,
 		contracts.StageTranscribeResult,
 		contracts.StageGradeResult,
@@ -186,7 +247,7 @@ func stageToEvent(stage string, attempt, maxAttempts int) (domain.Event, error) 
 		contracts.StageExportResult:
 		return domain.EventStageSucceeded, nil
 
-	// Command events that arrive on commands.q
+	// Command events that arrive on commands.q.
 	case "submit":
 		return domain.EventSubmitExam, nil
 	case "approve_for_grading":
@@ -197,28 +258,26 @@ func stageToEvent(stage string, attempt, maxAttempts int) (domain.Event, error) 
 		return domain.EventRetryStage, nil
 	case "flagged_for_review":
 		return domain.EventFlaggedForReview, nil
-	case "stage_failed":
-		if attempt >= maxAttempts {
-			return domain.EventStageFailed, nil
-		}
-		return domain.EventStageFailed, nil
 	}
 	return "", fmt.Errorf("unknown stage %q", stage)
 }
 
-// extractFlags attempts to parse a TranscribeFlags payload from the PayloadRef
-// field. PayloadRef may be a JSON-encoded TranscribeFlags or an object-store key.
-// For simplicity, this implementation tries to JSON-decode the ref directly;
-// production code would fetch the object from object storage first.
-func extractFlags(payloadRef string) ([]domain.QualityFlag, error) {
+// transcribeFlags fetches the transcribe-result.json sidecar referenced by
+// payloadRef (an object-store key) from the configured bucket, decodes it into
+// the TranscribeFlags shape, and evaluates the quality gates. A fetch or decode
+// error is returned to the caller so the message can be retried/dead-lettered;
+// it is NOT silently treated as a clean transcript.
+func (o *Orchestrator) transcribeFlags(ctx context.Context, payloadRef string) ([]domain.QualityFlag, error) {
 	if payloadRef == "" {
-		return nil, nil
+		return nil, fmt.Errorf("transcribeFlags: empty payload_ref")
+	}
+	data, err := o.obj.Get(ctx, o.bucket, payloadRef)
+	if err != nil {
+		return nil, fmt.Errorf("transcribeFlags: fetch sidecar %q/%q: %w", o.bucket, payloadRef, err)
 	}
 	var tf domain.TranscribeFlags
-	if err := json.Unmarshal([]byte(payloadRef), &tf); err != nil {
-		// PayloadRef is likely an object-store key, not inline JSON.
-		// Return empty flags rather than erroring; the caller logs a warning.
-		return nil, fmt.Errorf("extractFlags: not inline JSON: %w", err)
+	if err := json.Unmarshal(data, &tf); err != nil {
+		return nil, fmt.Errorf("transcribeFlags: decode sidecar %q: %w", payloadRef, err)
 	}
 	return domain.EvaluateGates(tf, domain.DefaultTunables()), nil
 }
@@ -285,10 +344,25 @@ func main() {
 	}
 	defer st.Close()
 
-	// ── Orchestrator ──────────────────────────────────────────────────────────
-	orch := NewOrchestrator(st, &rabbitBusAdapter{bus})
+	// ── Object store ──────────────────────────────────────────────────────────
+	// The orchestrator fetches stage sidecars (e.g. transcribe-result.json) to
+	// evaluate quality gates. It must read from the same bucket the workers
+	// write to (transcribe worker default: "submissions").
+	bucket := envOrDefault("MINIO_BUCKET", "submissions")
+	obj, err := store.New(store.Config{
+		Endpoint:  envRequired("MINIO_ENDPOINT"),
+		AccessKey: envRequired("MINIO_ACCESS_KEY"),
+		SecretKey: envRequired("MINIO_SECRET_KEY"),
+		UseSSL:    envOrDefault("MINIO_USE_SSL", "false") == "true",
+	})
+	if err != nil {
+		log.Fatalf("orchestrator: connect to object store: %v", err)
+	}
 
-	log.Println("orchestrator: started; listening on commands.q and results.q")
+	// ── Orchestrator ──────────────────────────────────────────────────────────
+	orch := NewOrchestrator(st, &rabbitBusAdapter{bus}, obj, bucket)
+
+	log.Println("orchestrator: started; listening on commands.q, results.q, and stage DLQs")
 	if err := orch.Start(ctx); err != nil && err != context.Canceled {
 		log.Fatalf("orchestrator: %v", err)
 	}

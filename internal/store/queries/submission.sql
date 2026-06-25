@@ -18,6 +18,14 @@ UPDATE submission
        updated_at = now()
  WHERE id = $2;
 
+-- name: FailSubmission :execrows
+UPDATE submission
+   SET state         = 'failed',
+       current_stage = $2,
+       error_detail  = $3,
+       updated_at    = now()
+ WHERE id = $1;
+
 -- name: GetSubmission :one
 SELECT
     id, tenant_id, assessment_version_id, student_id,
