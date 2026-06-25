@@ -55,6 +55,7 @@ var transitions = map[SubmissionState][]SubmissionState{
 	},
 	StateTranscriptionReviewRequired: {
 		StateTranscribing,
+		StateGrading, // approve-for-grading skips re-transcription
 		StateFailed,
 	},
 	StateGrading: {
