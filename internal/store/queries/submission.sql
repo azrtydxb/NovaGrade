@@ -12,7 +12,7 @@ RETURNING
     source_pdf_key, transcript_key, graded_key,
     created_at, updated_at;
 
--- name: SetSubmissionState :exec
+-- name: SetSubmissionState :execrows
 UPDATE submission
    SET state      = $1,
        updated_at = now()

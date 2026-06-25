@@ -14,7 +14,7 @@ type Querier interface {
 	CreateSubmission(ctx context.Context, arg CreateSubmissionParams) (Submission, error)
 	GetSubmission(ctx context.Context, id uuid.UUID) (Submission, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
-	SetSubmissionState(ctx context.Context, arg SetSubmissionStateParams) error
+	SetSubmissionState(ctx context.Context, arg SetSubmissionStateParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

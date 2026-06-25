@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -139,7 +140,15 @@ func TestGetSubmission_notFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := st.GetSubmission(ctx, uuid.New())
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestSetSubmissionState_notFound(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	err := st.SetSubmissionState(ctx, uuid.New(), contracts.StateTranscribing)
+	require.True(t, errors.Is(err, ErrNotFound), "expected ErrNotFound, got: %v", err)
 }
 
 func TestInsertAuditEvent(t *testing.T) {
@@ -162,4 +171,19 @@ func TestInsertAuditEvent(t *testing.T) {
 	require.NotEqual(t, uuid.Nil, ev.ID)
 	require.Equal(t, "submission", ev.EntityType)
 	require.Equal(t, "state_change", ev.Action)
+
+	// Read the row back directly from Postgres to verify persistence (not just RETURNING echo).
+	var (
+		persistedActor      string
+		persistedAction     string
+		persistedEntityType string
+	)
+	row := st.pool.QueryRow(ctx,
+		`SELECT actor, action, entity_type FROM audit_event WHERE id = $1`,
+		ev.ID,
+	)
+	require.NoError(t, row.Scan(&persistedActor, &persistedAction, &persistedEntityType))
+	require.Equal(t, "pipeline", persistedActor, "persisted actor must match inserted value")
+	require.Equal(t, "state_change", persistedAction, "persisted action must match inserted value")
+	require.Equal(t, "submission", persistedEntityType, "persisted entity_type must match inserted value")
 }

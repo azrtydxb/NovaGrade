@@ -15,6 +15,7 @@ package store
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"time"
 
@@ -28,6 +29,9 @@ import (
 	"github.com/azrtydxb/novagrade/internal/store/db"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 )
+
+// ErrNotFound is returned by Store methods when the requested record does not exist.
+var ErrNotFound = errors.New("store: not found")
 
 // migrationFS holds the embedded SQL migration files.
 //
@@ -172,14 +176,15 @@ func (s *Store) CreateSubmission(ctx context.Context, p CreateSubmissionParams) 
 // SetSubmissionState updates the state column (and bumps updated_at) for the
 // submission with the given id.
 func (s *Store) SetSubmissionState(ctx context.Context, id uuid.UUID, state contracts.SubmissionState) error {
-	// Use pool.Exec directly to capture RowsAffected for the "not found" check.
-	const q = `UPDATE submission SET state = $1, updated_at = now() WHERE id = $2`
-	tag, err := s.pool.Exec(ctx, q, string(state), id)
+	n, err := s.queries.SetSubmissionState(ctx, db.SetSubmissionStateParams{
+		State: string(state),
+		ID:    id,
+	})
 	if err != nil {
 		return fmt.Errorf("store: SetSubmissionState: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("store: SetSubmissionState: submission %s not found", id)
+	if n == 0 {
+		return fmt.Errorf("store: SetSubmissionState %s: %w", id, ErrNotFound)
 	}
 	return nil
 }
@@ -189,7 +194,7 @@ func (s *Store) GetSubmission(ctx context.Context, id uuid.UUID) (Submission, er
 	row, err := s.queries.GetSubmission(ctx, id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return Submission{}, fmt.Errorf("store: GetSubmission: not found: %s", id)
+			return Submission{}, fmt.Errorf("GetSubmission %s: %w", id, ErrNotFound)
 		}
 		return Submission{}, fmt.Errorf("store: GetSubmission: %w", err)
 	}

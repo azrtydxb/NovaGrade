@@ -93,7 +93,7 @@ func (q *Queries) GetSubmission(ctx context.Context, id uuid.UUID) (Submission, 
 	return i, err
 }
 
-const setSubmissionState = `-- name: SetSubmissionState :exec
+const setSubmissionState = `-- name: SetSubmissionState :execrows
 UPDATE submission
    SET state      = $1,
        updated_at = now()
@@ -105,7 +105,10 @@ type SetSubmissionStateParams struct {
 	ID    uuid.UUID
 }
 
-func (q *Queries) SetSubmissionState(ctx context.Context, arg SetSubmissionStateParams) error {
-	_, err := q.db.Exec(ctx, setSubmissionState, arg.State, arg.ID)
-	return err
+func (q *Queries) SetSubmissionState(ctx context.Context, arg SetSubmissionStateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSubmissionState, arg.State, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
