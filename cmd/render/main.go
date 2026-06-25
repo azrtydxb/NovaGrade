@@ -136,6 +136,9 @@ func handleEnvelope(ctx context.Context, env contracts.Envelope, obj *store.ObjS
 	if err != nil {
 		return fmt.Errorf("render: RenderPDF: %w", err)
 	}
+	if len(pages) == 0 {
+		return fmt.Errorf("render: submission %s/%s produced zero content pages — PDF may be corrupt or entirely blank", env.TenantID, env.SubmissionID)
+	}
 	log.Printf("render: %s/%s → %d content pages", env.TenantID, env.SubmissionID, len(pages))
 
 	// 4. Upload each content-page PNG to the object store.

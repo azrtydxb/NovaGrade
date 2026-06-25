@@ -4,6 +4,7 @@
 package pipeline
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
@@ -64,7 +65,9 @@ func RenderPDF(ctx context.Context, pdfPath, outDir string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("render: glob %q: %w", pattern, err)
 	}
-	sort.Strings(matches)
+	sort.Slice(matches, func(i, j int) bool {
+		return PageIndex(matches[i]) < PageIndex(matches[j])
+	})
 
 	var contentPages []string
 	for _, png := range matches {
@@ -90,13 +93,34 @@ func RenderPDF(ctx context.Context, pdfPath, outDir string) ([]string, error) {
 // above BlankThreshold, indicating a near-white (empty/scanned-blank) page.
 func isBlank(ctx context.Context, magickBin, pngPath string) (bool, error) {
 	cmd := exec.CommandContext(ctx, magickBin, "identify", "-format", "%[fx:mean]", pngPath)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return false, fmt.Errorf("render: magick identify %q: %w", pngPath, err)
+		return false, fmt.Errorf("render: magick identify %q: %w\n%s", pngPath, err, stderr.String())
 	}
 	mean, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 	if err != nil {
 		return false, fmt.Errorf("render: parse mean brightness %q: %w", string(out), err)
 	}
 	return mean >= BlankThreshold, nil
+}
+
+// PageIndex extracts the trailing page number from a pdftoppm output filename.
+// pdftoppm names files like <prefix>-<N>.png (N may be zero-padded).
+// Returns -1 if the integer cannot be parsed, so such files sort first.
+func PageIndex(filename string) int {
+	base := filepath.Base(filename)
+	// Strip extension.
+	if idx := strings.LastIndex(base, "."); idx >= 0 {
+		base = base[:idx]
+	}
+	// Find last '-' separator.
+	if idx := strings.LastIndex(base, "-"); idx >= 0 {
+		n, err := strconv.Atoi(base[idx+1:])
+		if err == nil {
+			return n
+		}
+	}
+	return -1
 }
