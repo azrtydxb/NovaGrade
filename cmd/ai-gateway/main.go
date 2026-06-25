@@ -59,7 +59,9 @@ func main() {
 		}
 		resp, err := provider.Complete(r.Context(), req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

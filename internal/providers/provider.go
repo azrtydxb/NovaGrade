@@ -68,5 +68,6 @@ type VLLMConfig struct {
 	PriceTable map[string]ModelPrice
 	MaxRetries int
 	RetryDelay time.Duration
+	Timeout    time.Duration  // HTTP client timeout; defaults to 180s if zero
 	LogSink    func(AICallLog) // called after every Complete (even on error)
 }

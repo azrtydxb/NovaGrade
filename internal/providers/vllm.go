@@ -25,18 +25,22 @@ func NewVLLMProvider(cfg VLLMConfig) *VLLMProvider {
 	if cfg.MaxRetries < 1 {
 		cfg.MaxRetries = 1
 	}
+	// Fix 4: default HTTP client timeout to 180s (mirrors POC timeout=180.0).
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 180 * time.Second
+	}
 	return &VLLMProvider{
 		cfg:    cfg,
-		client: &http.Client{},
+		client: &http.Client{Timeout: cfg.Timeout},
 	}
 }
 
 // openAI request/response shapes.
 type chatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []interface{} `json:"messages"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Temperature float64       `json:"temperature,omitempty"`
+	Model       string `json:"model"`
+	Messages    []any  `json:"messages"`
+	MaxTokens   int    `json:"max_tokens,omitempty"`
+	Temperature float64 `json:"temperature,omitempty"`
 }
 
 type chatResponse struct {
@@ -73,8 +77,8 @@ type simpleMessage struct {
 }
 
 type multipartMessage struct {
-	Role    string        `json:"role"`
-	Content []interface{} `json:"content"`
+	Role    string `json:"role"`
+	Content []any  `json:"content"`
 }
 
 // Complete implements AIProvider.
@@ -137,7 +141,7 @@ func (p *VLLMProvider) complete(ctx context.Context, req CompletionReq) (Complet
 	}
 
 	// Re-ask once.
-	reask := append([]interface{}{}, messages...)
+	reask := append([]any{}, messages...)
 	reask = append(reask,
 		simpleMessage{Role: "assistant", Content: content},
 		simpleMessage{Role: "user", Content: "Your reply was not valid JSON matching the required schema. Reply ONLY with valid JSON."},
@@ -174,8 +178,8 @@ func (p *VLLMProvider) complete(ctx context.Context, req CompletionReq) (Complet
 // buildMessages converts request messages into OpenAI-compatible message
 // objects, transforming the last user message into multi-part content when
 // images are present.
-func buildMessages(msgs []Message, images [][]byte) []interface{} {
-	out := make([]interface{}, 0, len(msgs))
+func buildMessages(msgs []Message, images [][]byte) []any {
+	out := make([]any, 0, len(msgs))
 
 	lastUser := -1
 	if len(images) > 0 {
@@ -189,7 +193,7 @@ func buildMessages(msgs []Message, images [][]byte) []interface{} {
 
 	for i, m := range msgs {
 		if i == lastUser {
-			parts := []interface{}{textContentPart{Type: "text", Text: m.Content}}
+			parts := []any{textContentPart{Type: "text", Text: m.Content}}
 			for _, img := range images {
 				b64 := base64.StdEncoding.EncodeToString(img)
 				parts = append(parts, imageContentPart{
@@ -206,7 +210,7 @@ func buildMessages(msgs []Message, images [][]byte) []interface{} {
 }
 
 // call POSTs a chat-completion request with linear-backoff retry.
-func (p *VLLMProvider) call(ctx context.Context, req CompletionReq, messages []interface{}) (chatResponse, error) {
+func (p *VLLMProvider) call(ctx context.Context, req CompletionReq, messages []any) (chatResponse, error) {
 	body := chatRequest{
 		Model:       req.Model,
 		Messages:    messages,
@@ -235,11 +239,31 @@ func (p *VLLMProvider) call(ctx context.Context, req CompletionReq, messages []i
 		resp, err := p.doRequest(ctx, url, raw)
 		if err != nil {
 			lastErr = err
+			// Fix 2: do not retry 4xx client errors — they won't succeed on retry.
+			if isClientError(err) {
+				return chatResponse{}, err
+			}
 			continue
 		}
 		return resp, nil
 	}
 	return chatResponse{}, fmt.Errorf("request failed after %d attempts: %w", p.cfg.MaxRetries, lastErr)
+}
+
+// clientError is a sentinel error type for 4xx HTTP responses.
+type clientError struct {
+	status int
+	body   string
+}
+
+func (e *clientError) Error() string {
+	return fmt.Sprintf("client error status %d: %s", e.status, e.body)
+}
+
+// isClientError returns true if err is a *clientError (HTTP 4xx).
+func isClientError(err error) bool {
+	_, ok := err.(*clientError)
+	return ok
 }
 
 func (p *VLLMProvider) doRequest(ctx context.Context, url string, raw []byte) (chatResponse, error) {
@@ -264,6 +288,10 @@ func (p *VLLMProvider) doRequest(ctx context.Context, url string, raw []byte) (c
 	}
 
 	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
+		// Fix 2: distinguish 4xx (client errors — no point retrying) from 5xx.
+		if httpResp.StatusCode >= 400 && httpResp.StatusCode < 500 {
+			return chatResponse{}, &clientError{status: httpResp.StatusCode, body: string(respBody)}
+		}
 		return chatResponse{}, fmt.Errorf("unexpected status %d: %s", httpResp.StatusCode, string(respBody))
 	}
 
@@ -313,14 +341,18 @@ func validateJSON(sch *jsonschema.Schema, content string) error {
 // extractJSON mirrors the Python POC's extract_json:
 //   - strip ``` fences (with optional `json` suffix)
 //   - try json.Unmarshal on stripped text
-//   - fall back: find first { or [, scan for balanced close brace/bracket
+//   - fall back: find first { or [, pick whichever comes EARLIEST (min of both),
+//     scan for balanced close brace/bracket, string-escape-aware
 func extractJSON(s string) (json.RawMessage, bool) {
 	stripped := strings.TrimSpace(s)
 
+	// Fix 5: replace strings.HasPrefix+strings.TrimPrefix with strings.CutPrefix.
 	// Strip code fences.
-	if strings.HasPrefix(stripped, "```") {
-		stripped = strings.TrimPrefix(stripped, "```")
-		stripped = strings.TrimPrefix(stripped, "json")
+	if after, found := strings.CutPrefix(stripped, "```"); found {
+		stripped = after
+		if after2, found2 := strings.CutPrefix(stripped, "json"); found2 {
+			stripped = after2
+		}
 		stripped = strings.TrimSpace(stripped)
 		if idx := strings.LastIndex(stripped, "```"); idx >= 0 {
 			stripped = stripped[:idx]
@@ -332,21 +364,24 @@ func extractJSON(s string) (json.RawMessage, bool) {
 		return json.RawMessage(stripped), true
 	}
 
-	// Fall back: locate first { or [ and scan for the balanced closer.
+	// Fix 1: pick the EARLIEST JSON start — minimum of first '{' and first '['.
+	// Mirrors: start = min(starts) in the Python POC.
+	braceIdx := strings.IndexByte(stripped, '{')
+	bracketIdx := strings.IndexByte(stripped, '[')
+
 	start := -1
 	var open, closeCh byte
-	for i := 0; i < len(stripped); i++ {
-		if stripped[i] == '{' {
-			start, open, closeCh = i, '{', '}'
-			break
-		}
-		if stripped[i] == '[' {
-			start, open, closeCh = i, '[', ']'
-			break
-		}
-	}
-	if start < 0 {
+	switch {
+	case braceIdx < 0 && bracketIdx < 0:
 		return nil, false
+	case braceIdx < 0:
+		start, open, closeCh = bracketIdx, '[', ']'
+	case bracketIdx < 0:
+		start, open, closeCh = braceIdx, '{', '}'
+	case bracketIdx < braceIdx:
+		start, open, closeCh = bracketIdx, '[', ']'
+	default:
+		start, open, closeCh = braceIdx, '{', '}'
 	}
 
 	depth := 0
