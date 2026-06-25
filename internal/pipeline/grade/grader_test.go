@@ -17,15 +17,17 @@ import (
 // ─────────────────────────────────────────────────────────────────────────────
 
 // mockProvider records whether Complete was called and optionally returns an
-// error or a canned response.
+// error or a canned response. It also captures the last request for assertion.
 type mockProvider struct {
-	called   bool
-	response providers.CompletionResp
-	err      error
+	called      bool
+	lastRequest providers.CompletionReq
+	response    providers.CompletionResp
+	err         error
 }
 
-func (m *mockProvider) Complete(_ context.Context, _ providers.CompletionReq) (providers.CompletionResp, error) {
+func (m *mockProvider) Complete(_ context.Context, req providers.CompletionReq) (providers.CompletionResp, error) {
 	m.called = true
+	m.lastRequest = req
 	return m.response, m.err
 }
 
@@ -70,12 +72,17 @@ func TestGuideMarkScheme_ExactCI_Match_NoLLMCall(t *testing.T) {
 }
 
 func TestGuideMarkScheme_ExactCI_NoMatch_NoLLMCall(t *testing.T) {
-	mock := &mockProvider{}
+	// Use two independent mocks so the assertion "provider must NOT be called"
+	// is unambiguous: fallbackMock is wired to the LLMJudge fallback, and
+	// schemeMock is wired to the GuideMarkScheme's own rubric provider.
+	// Neither must be invoked for a deterministic exact_ci non-match.
+	fallbackMock := &mockProvider{}
+	schemeMock := &mockProvider{}
 	guide := grade.Guide{
 		"Q1": {MaxMarks: 2, Answer: "Paris", Match: "exact_ci"},
 	}
-	fallback := grade.NewLLMJudge(mock, "any-model")
-	scheme := grade.NewGuideMarkScheme(guide, fallback, mock, "any-model")
+	fallback := grade.NewLLMJudge(fallbackMock, "any-model")
+	scheme := grade.NewGuideMarkScheme(guide, fallback, schemeMock, "any-model")
 
 	q := contracts.TranscribedQuestion{
 		QuestionNo:     "Q1",
@@ -91,7 +98,11 @@ func TestGuideMarkScheme_ExactCI_NoMatch_NoLLMCall(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0.0, gq.AwardedMarks, "zero marks expected on non-match")
 	assert.Equal(t, "does not match marking guide", gq.Justification)
-	assert.False(t, mock.called, "AIProvider.Complete must NOT be called for exact_ci non-match")
+
+	// CRITICAL: neither the fallback LLMJudge nor the scheme's rubric provider
+	// must have been called for a deterministic exact_ci non-match.
+	assert.False(t, fallbackMock.called, "fallback AIProvider.Complete must NOT be called for exact_ci non-match")
+	assert.False(t, schemeMock.called, "scheme AIProvider.Complete must NOT be called for exact_ci non-match")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -186,6 +197,62 @@ func TestGuideMarkScheme_Set_Match(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 0.0, gq.AwardedMarks)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test 4b: rubric entry — provider MUST be called, marks clamped, rubric in prompt
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestGuideMarkScheme_Rubric_CallsProvider(t *testing.T) {
+	const rubricText = "Award 1 mark per correct factor listed, up to 3 marks."
+	const maxMarks = 3.0
+
+	// Mock returns a valid awarded-marks JSON response awarding more than max to
+	// confirm clamping; the real awarded value (6) exceeds max_marks (3).
+	schemeMock := &mockProvider{
+		response: providers.CompletionResp{
+			Content: `{"awarded_marks": 6, "justification": "good answer", "grade_confidence": 0.85}`,
+		},
+	}
+	fallbackMock := &mockProvider{}
+
+	guide := grade.Guide{
+		"Q4": {MaxMarks: maxMarks, Rubric: rubricText, Match: "rubric"},
+	}
+	fallback := grade.NewLLMJudge(fallbackMock, "fallback-model")
+	scheme := grade.NewGuideMarkScheme(guide, fallback, schemeMock, "rubric-model")
+
+	q := contracts.TranscribedQuestion{
+		QuestionNo:     "Q4",
+		MaxMarks:       maxMarks,
+		QuestionText:   "List three factors that affect reaction rate.",
+		StudentAnswer:  "Temperature, concentration, and surface area.",
+		ReadConfidence: 0.9,
+	}
+
+	ctx := context.Background()
+	gq, err := scheme.Grade(ctx, q)
+
+	require.NoError(t, err)
+
+	// (a) The rubric provider WAS called.
+	assert.True(t, schemeMock.called, "scheme provider must be called for rubric entry")
+
+	// (b) Awarded marks are clamped within [0, max_marks].
+	assert.GreaterOrEqual(t, gq.AwardedMarks, 0.0, "awarded marks must be >= 0")
+	assert.LessOrEqual(t, gq.AwardedMarks, maxMarks, "awarded marks must be <= max_marks (clamped)")
+	assert.Equal(t, maxMarks, gq.AwardedMarks, "LLM returned 6 but must be clamped to max_marks=3")
+
+	// (c) The prompt sent to the provider includes the rubric text.
+	require.NotEmpty(t, schemeMock.lastRequest.Messages, "provider must have received at least one message")
+	var promptContent string
+	for _, msg := range schemeMock.lastRequest.Messages {
+		promptContent += msg.Content
+	}
+	assert.Contains(t, promptContent, rubricText, "rubric text must appear in the messages sent to the provider")
+
+	// Fallback must NOT have been called.
+	assert.False(t, fallbackMock.called, "fallback must NOT be called when provider is set for rubric entry")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

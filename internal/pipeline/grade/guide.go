@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/azrtydxb/novagrade/internal/providers"
@@ -152,6 +153,7 @@ func (g *GuideMarkScheme) Grade(ctx context.Context, q contracts.TranscribedQues
 
 	case "rubric":
 		if g.provider == nil {
+			log.Printf("grade: rubric entry %q has no AI provider; grading via fallback without rubric context", q.QuestionNo)
 			return g.fallback.Grade(ctx, q)
 		}
 		prompt := fmt.Sprintf(
