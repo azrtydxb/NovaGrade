@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 
 func testMinioCfg(t *testing.T) Config {
 	t.Helper()
+	if os.Getenv("SKIP_DOCKER_TESTS") != "" || testing.Short() {
+		t.Skip("requires Docker (set SKIP_DOCKER_TESTS to skip, or omit -short)")
+	}
 	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
 		Image:        "minio/minio",
