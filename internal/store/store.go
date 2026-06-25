@@ -287,6 +287,25 @@ func (s *Store) InsertAuditEvent(ctx context.Context, p InsertAuditEventParams) 
 	return auditEventFromDB(row), nil
 }
 
+// ListAuditEventsBySubmission returns all audit_event rows for a given
+// submission (entity_id) within the given tenant, ordered chronologically
+// (oldest first). Only rows with entity_type = "submission" are returned.
+// This is a read-only query — there is no update or delete path.
+func (s *Store) ListAuditEventsBySubmission(ctx context.Context, tenantID, submissionID uuid.UUID) ([]AuditEvent, error) {
+	rows, err := s.queries.ListAuditEventsBySubmission(ctx, db.ListAuditEventsBySubmissionParams{
+		TenantID: tenantID,
+		EntityID: ptrUUIDToNullUUID(&submissionID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("store: ListAuditEventsBySubmission: %w", err)
+	}
+	result := make([]AuditEvent, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, auditEventFromDB(row))
+	}
+	return result, nil
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Mapping helpers — db package types → public domain types
 // ─────────────────────────────────────────────────────────────────────────────
