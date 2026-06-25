@@ -1,5 +1,7 @@
 package contracts
 
+import "slices"
+
 // SubmissionState is the canonical state of a submission in the grading pipeline.
 type SubmissionState string
 
@@ -92,10 +94,5 @@ func CanTransition(from, to SubmissionState) bool {
 	if !ok {
 		return false
 	}
-	for _, s := range allowed {
-		if s == to {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, to)
 }
