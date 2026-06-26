@@ -656,7 +656,7 @@ func (s *Store) GetAssessmentVersionTenantID(ctx context.Context, avid uuid.UUID
 		"SELECT tenant_id FROM assessment_version WHERE id = $1", avid,
 	).Scan(&tenantID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return uuid.UUID{}, fmt.Errorf("GetAssessmentVersionTenantID %s: %w", avid, ErrNotFound)
 		}
 		return uuid.UUID{}, fmt.Errorf("store: GetAssessmentVersionTenantID: %w", err)
