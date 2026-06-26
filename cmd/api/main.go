@@ -121,6 +121,12 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	eh := &api.ExportHandlers{
+		Store:      st,
+		Objects:    objAdapter,
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -138,6 +144,7 @@ func main() {
 		r.Post("/submissions/{id}/approve", ah.Approve)
 		r.Post("/submissions/{id}/publish", ah.Publish)
 		r.Post("/submissions/{id}/export", ah.Export)
+		r.Get("/submissions/{id}/export.csv", eh.ExportCSV)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
