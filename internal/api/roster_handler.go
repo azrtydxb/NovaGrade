@@ -10,11 +10,9 @@ package api
 // For each imported student, UpsertStudent is called so that re-imports are idempotent.
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -41,9 +39,9 @@ type RosterHandlers struct {
 // ImportRoster handles POST /v1/rosters/import.
 //
 // Query param: ?provider=csv (default: csv)
-// Body: roster file content (e.g. CSV).
+// Body: multipart/form-data with a "file" field containing the roster file.
 //
-// Response: 200 JSON { "imported": N, "errors": [...] }
+// Response: 200 JSON { "imported": N, "skipped": N, "errors": [...] }
 func (h *RosterHandlers) ImportRoster(w http.ResponseWriter, r *http.Request) {
 	p, ok := auth.PrincipalFromContext(r.Context())
 	if !ok {
@@ -88,16 +86,31 @@ func (h *RosterHandlers) ImportRoster(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
-	if err != nil {
-		http.Error(w, "read error", http.StatusInternalServerError)
-		return
+	// Parse multipart/form-data; fall back to reading raw body for plain CSV
+	// (supports both multipart uploads and direct body for backward compat).
+	var fileReader interface{ Read(p []byte) (n int, err error) }
+	if err := r.ParseMultipartForm(32 << 20); err == nil {
+		f, _, ferr := r.FormFile("file")
+		if ferr != nil {
+			http.Error(w, "missing file field in multipart form", http.StatusBadRequest)
+			return
+		}
+		defer f.Close()
+		fileReader = f
+	} else {
+		// Fall back to raw body (plain CSV body).
+		fileReader = r.Body
 	}
 
 	var importErrors []string
-	students, importErr := source.ImportRoster(r.Context(), bytes.NewReader(body))
+	skipped := 0
+	students, importErr := source.ImportRoster(r.Context(), fileReader)
 	if importErr != nil {
+		// The connector returns a single error summarising all skipped/malformed rows.
 		importErrors = append(importErrors, importErr.Error())
+		// Count skipped rows by parsing the connector error when possible.
+		// We count non-nil connector error as skipped rows surfaced to caller.
+		skipped = countSkippedFromErr(importErr)
 	}
 
 	imported := 0
@@ -112,6 +125,21 @@ func (h *RosterHandlers) ImportRoster(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"imported": imported,
+		"skipped":  skipped,
 		"errors":   importErrors,
 	})
+}
+
+// countSkippedFromErr attempts to extract the number of skipped rows from a
+// connector-level ImportRoster error. The CSV connector embeds the count in
+// the message as "skipped N malformed row(s)"; if unparseable, returns 1.
+func countSkippedFromErr(err error) int {
+	if err == nil {
+		return 0
+	}
+	var n int
+	if _, scanErr := fmt.Sscanf(err.Error(), "csv roster: skipped %d malformed", &n); scanErr == nil && n > 0 {
+		return n
+	}
+	return 1
 }

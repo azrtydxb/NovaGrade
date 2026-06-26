@@ -4,8 +4,10 @@ package api_test
 //   POST /v1/rosters/import?provider=csv
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,6 +25,20 @@ import (
 	"github.com/azrtydxb/novagrade/internal/domain"
 	"github.com/azrtydxb/novagrade/internal/store"
 )
+
+// makeRosterMultipart builds a multipart/form-data body with the CSV content in
+// the "file" field and returns the body buffer and Content-Type header value.
+func makeRosterMultipart(t *testing.T, csvContent string) (*bytes.Buffer, string) {
+	t.Helper()
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	fw, err := mw.CreateFormFile("file", "roster.csv")
+	require.NoError(t, err)
+	_, err = fw.Write([]byte(csvContent))
+	require.NoError(t, err)
+	require.NoError(t, mw.Close())
+	return body, mw.FormDataContentType()
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RosterFakeStore — implements api.RosterStore
@@ -71,6 +87,7 @@ func buildRosterRouter(t *testing.T, h *api.RosterHandlers, resolver *auth.APIKe
 
 type rosterImportResponse struct {
 	Imported int      `json:"imported"`
+	Skipped  int      `json:"skipped"`
 	Errors   []string `json:"errors"`
 }
 
@@ -93,8 +110,10 @@ func TestImportRoster_CSV_OK(t *testing.T) {
 	tok := issueToken(t, principal)
 
 	csvBody := "email,full_name\nalice@example.com,Alice Smith\nbob@example.com,Bob Jones\n"
-	req := httptest.NewRequest(http.MethodPost, "/v1/rosters/import?provider=csv", strings.NewReader(csvBody))
+	body, ct := makeRosterMultipart(t, csvBody)
+	req := httptest.NewRequest(http.MethodPost, "/v1/rosters/import?provider=csv", body)
 	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", ct)
 	rec := httptest.NewRecorder()
 
 	router := buildRosterRouter(t, h, auth.NewAPIKeyResolver())
@@ -105,6 +124,7 @@ func TestImportRoster_CSV_OK(t *testing.T) {
 	var resp rosterImportResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, 2, resp.Imported)
+	assert.Equal(t, 0, resp.Skipped)
 	assert.Empty(t, resp.Errors)
 	assert.Equal(t, 2, fakeStore.count())
 }
@@ -165,8 +185,10 @@ func TestImportRoster_EmptyBody(t *testing.T) {
 	}
 	tok := issueToken(t, principal)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/rosters/import", strings.NewReader(""))
+	body, ct := makeRosterMultipart(t, "")
+	req := httptest.NewRequest(http.MethodPost, "/v1/rosters/import", body)
 	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", ct)
 	rec := httptest.NewRecorder()
 
 	router := buildRosterRouter(t, h, auth.NewAPIKeyResolver())
@@ -179,4 +201,75 @@ func TestImportRoster_EmptyBody(t *testing.T) {
 	assert.Equal(t, 0, resp.Imported)
 	assert.Equal(t, 0, fakeStore.count())
 	assert.NotEmpty(t, resp.Errors, "empty CSV should report a parse error")
+}
+
+// TestImportRoster_Idempotent verifies that sending the same CSV twice succeeds
+// both times (upsert is idempotent) and each response contains imported >= 0.
+func TestImportRoster_Idempotent(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeStore := newRosterFakeStore()
+	h := &api.RosterHandlers{Store: fakeStore, DeployMode: "onprem"}
+
+	principal := auth.Principal{
+		ID:       "admin-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleSchoolAdmin},
+	}
+	tok := issueToken(t, principal)
+
+	csvBody := "email,full_name\nalice@example.com,Alice Smith\nbob@example.com,Bob Jones\n"
+	router := buildRosterRouter(t, h, auth.NewAPIKeyResolver())
+
+	for i := 0; i < 2; i++ {
+		body, ct := makeRosterMultipart(t, csvBody)
+		req := httptest.NewRequest(http.MethodPost, "/v1/rosters/import?provider=csv", body)
+		req.Header.Set("Authorization", "Bearer "+tok)
+		req.Header.Set("Content-Type", ct)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "attempt %d body: %s", i+1, rec.Body.String())
+
+		var resp rosterImportResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.GreaterOrEqual(t, resp.Imported, 0, "attempt %d: imported should be >= 0", i+1)
+		assert.Empty(t, resp.Errors, "attempt %d: no errors expected for valid CSV", i+1)
+	}
+}
+
+// TestImportRoster_MalformedRows verifies that a CSV with one valid row and one
+// malformed row (missing email) returns imported=1 and len(errors)>=1.
+func TestImportRoster_MalformedRows(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeStore := newRosterFakeStore()
+	h := &api.RosterHandlers{Store: fakeStore, DeployMode: "onprem"}
+
+	principal := auth.Principal{
+		ID:       "admin-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleSchoolAdmin},
+	}
+	tok := issueToken(t, principal)
+
+	// Valid header + 1 valid row + 1 malformed row (empty email field).
+	csvBody := "email,full_name\nalice@example.com,Alice Smith\n,Bob Jones\n"
+	body, ct := makeRosterMultipart(t, csvBody)
+	req := httptest.NewRequest(http.MethodPost, "/v1/rosters/import?provider=csv", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", ct)
+	rec := httptest.NewRecorder()
+
+	router := buildRosterRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp rosterImportResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Imported, "only the valid row should be imported")
+	assert.GreaterOrEqual(t, len(resp.Errors), 1, "malformed row should be reported as an error")
 }

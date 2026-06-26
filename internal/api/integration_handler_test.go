@@ -25,6 +25,7 @@ import (
 	"github.com/azrtydxb/novagrade/internal/auth"
 	"github.com/azrtydxb/novagrade/internal/domain"
 	"github.com/azrtydxb/novagrade/internal/integration"
+	integrationcsv "github.com/azrtydxb/novagrade/internal/integration/csv"
 	"github.com/azrtydxb/novagrade/internal/secrets"
 	"github.com/azrtydxb/novagrade/internal/store"
 )
@@ -318,4 +319,75 @@ func TestUpsertIntegration_CredentialsEncrypted(t *testing.T) {
 
 	// The response body must never contain the secret.
 	assert.NotContains(t, rec.Body.String(), "super-secret-value")
+}
+
+// TestUpsertIntegration_UnknownProvider verifies that POST /v1/integrations
+// returns HTTP 400 when the (category, provider) pair is not registered.
+func TestUpsertIntegration_UnknownProvider(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+	t.Setenv("INTEGRATION_ENC_KEY", testEncKey)
+
+	tenantID := uuid.New()
+	fakeStore := newIntegrationFakeStore()
+
+	// Build a registry with only the CSV connectors registered.
+	reg := integration.NewRegistry()
+	integrationcsv.Register(reg)
+
+	h := &api.IntegrationHandlers{Store: fakeStore, Registry: reg, DeployMode: "onprem"}
+
+	principal := auth.Principal{
+		ID:       "admin-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleSchoolAdmin},
+	}
+	tok := issueToken(t, principal)
+
+	// "unknown-provider" is not registered in the registry.
+	bodyJSON := `{"category":"roster","provider":"unknown-provider"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/integrations", strings.NewReader(bodyJSON))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildIntegrationRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "unknown connector")
+}
+
+// TestDeleteIntegration_CrossTenant verifies that a connection created for
+// TenantA cannot be deleted by TenantB (returns HTTP 404).
+func TestDeleteIntegration_CrossTenant(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+	fakeStore := newIntegrationFakeStore()
+	h := &api.IntegrationHandlers{Store: fakeStore, DeployMode: "onprem"}
+
+	// Create a connection belonging to TenantA.
+	conn, err := fakeStore.UpsertConnection(context.Background(), store.UpsertConnectionParams{
+		TenantID: tenantA,
+		Category: integration.CategoryRoster,
+		Provider: "csv",
+	})
+	require.NoError(t, err)
+
+	// TenantB attempts to delete TenantA's connection.
+	principal := auth.Principal{
+		ID:       "admin-b",
+		TenantID: tenantB.String(),
+		Roles:    []domain.Role{domain.RoleSchoolAdmin},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/integrations/"+conn.ID.String(), nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildIntegrationRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code, "cross-tenant delete must return 404")
 }

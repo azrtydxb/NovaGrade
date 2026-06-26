@@ -43,6 +43,7 @@ type Querier interface {
 	SetSourcePDFKey(ctx context.Context, arg SetSourcePDFKeyParams) (int64, error)
 	SetSubmissionState(ctx context.Context, arg SetSubmissionStateParams) (int64, error)
 	UpsertIntegrationConnection(ctx context.Context, arg UpsertIntegrationConnectionParams) (IntegrationConnection, error)
+	UpsertStudent(ctx context.Context, arg UpsertStudentParams) (Student, error)
 }
 
 var _ Querier = (*Queries)(nil)

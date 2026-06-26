@@ -42,6 +42,7 @@ type IntegrationStore interface {
 // IntegrationHandlers holds dependencies for the integration config HTTP handlers.
 type IntegrationHandlers struct {
 	Store      IntegrationStore
+	Registry   *integration.Registry
 	DeployMode string
 }
 
@@ -97,6 +98,14 @@ func (h *IntegrationHandlers) UpsertIntegration(w http.ResponseWriter, r *http.R
 	if req.Category == "" || req.Provider == "" {
 		http.Error(w, "category and provider are required", http.StatusBadRequest)
 		return
+	}
+
+	// Validate (category, provider) via registry — 400 if unknown.
+	if h.Registry != nil {
+		if _, ok := h.Registry.Get(integration.Category(req.Category), req.Provider); !ok {
+			http.Error(w, "unknown connector: "+req.Category+"/"+req.Provider, http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Encrypt credentials if provided.

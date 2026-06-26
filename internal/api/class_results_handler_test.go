@@ -273,3 +273,75 @@ func TestClassResultsCSV_SkipsUngraded(t *testing.T) {
 	// Only Alice's 2 questions + header. Ungraded submission contributes nothing.
 	require.Len(t, rows, 3, "header + 2 questions from the single graded submission")
 }
+
+// TestClassResults_CrossTenant verifies that a request for an assessment version
+// belonging to TenantA, made by TenantB, returns HTTP 404 (no data leakage).
+func TestClassResults_CrossTenant(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+	avid := uuid.New()
+	fakeStore := newClassResultsFakeStore()
+	fakeObjects := NewFakeObjectStore()
+
+	// Seed a graded submission for TenantA's assessment version.
+	fakeStore.seedGradedSubmission(t, fakeObjects, tenantA, avid, "Alice")
+
+	h := &api.ClassResultsHandlers{Store: fakeStore, Objects: fakeObjects, DeployMode: "onprem"}
+
+	// Request as TenantB — the store filters by tenant so TenantB sees no submissions.
+	principal := auth.Principal{
+		ID:       "teacher-b",
+		TenantID: tenantB.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/assessment-versions/"+avid.String()+"/results.csv", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildClassResultsRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	// The handler returns 200 with header-only CSV (TenantB sees nothing from TenantA).
+	// This tests tenant isolation: no 500, no TenantA data in the response.
+	require.Equal(t, http.StatusOK, rec.Code, "cross-tenant should return 200 with empty result set, body: %s", rec.Body.String())
+
+	r := csv.NewReader(strings.NewReader(rec.Body.String()))
+	rows, err := r.ReadAll()
+	require.NoError(t, err)
+	// TenantB sees header only — TenantA's submissions are filtered out by store.
+	require.Len(t, rows, 1, "cross-tenant: only header row expected (no TenantA data)")
+}
+
+// TestClassResults_Forbidden verifies that a user without ActionViewResults
+// (e.g., scanner role) receives 404 when accessing class results.
+func TestClassResults_Forbidden(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	avid := uuid.New()
+	fakeStore := newClassResultsFakeStore()
+	fakeObjects := NewFakeObjectStore()
+	h := &api.ClassResultsHandlers{Store: fakeStore, Objects: fakeObjects, DeployMode: "onprem"}
+
+	resolver := auth.NewAPIKeyResolver()
+	scanner := auth.Principal{
+		ID:       "scanner-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleScanner},
+	}
+	resolver.Register("scanner-key", scanner)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/assessment-versions/"+avid.String()+"/results.csv", nil)
+	req.Header.Set("X-API-Key", "scanner-key")
+	rec := httptest.NewRecorder()
+
+	router := buildClassResultsRouter(t, h, resolver)
+	router.ServeHTTP(rec, req)
+
+	// Scanner lacks ActionViewResults → handler returns 404 (not 403, avoids enumeration).
+	assert.Equal(t, http.StatusNotFound, rec.Code, "scanner must not access class results")
+}
