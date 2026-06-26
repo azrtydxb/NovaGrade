@@ -26,12 +26,14 @@ import (
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 )
 
-// AnalyticsStore is the store interface for both analytics endpoints.
+// AnalyticsStore is the store interface for all analytics endpoints.
 type AnalyticsStore interface {
 	ExportStore // GetSubmission, GetFinalGrade, ListTeacherReviews
 	ListSubmissionsByAssessmentVersion(ctx context.Context, tenantID, avid uuid.UUID) ([]store.Submission, error)
 	GetAssessmentVersionTenantID(ctx context.Context, avid uuid.UUID) (uuid.UUID, error)
 	ListAuditEventsBySubmission(ctx context.Context, tenantID, submissionID uuid.UUID) ([]store.AuditEvent, error)
+	ListQuestionOutcomes(ctx context.Context, tenantID, assessmentVersionID uuid.UUID) ([]store.QuestionOutcome, error)
+	ListOutcomes(ctx context.Context, tenantID uuid.UUID) ([]store.CurriculumOutcome, error)
 }
 
 // AnalyticsHandlers holds dependencies for both analytics endpoints.
@@ -223,6 +225,92 @@ func (h *AnalyticsHandlers) GetOverrideStats(w http.ResponseWriter, r *http.Requ
 		OverriddenQuestions:  overriddenQuestions,
 		OverrideRate:         overrideRate,
 		MeanAbsDelta:         meanAbsDelta,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// outcomeMasteryResponse is the JSON shape for GET …/outcome-mastery.
+type outcomeMasteryResponse struct {
+	Outcomes    []analytics.OutcomeStat `json:"outcomes"`
+	Gaps        []analytics.OutcomeStat `json:"gaps"`
+	GradedCount int                     `json:"graded_count"`
+}
+
+// GetOutcomeMastery handles GET /v1/assessment-versions/{avid}/outcome-mastery.
+//
+// It gathers effective graded papers (reusing effectiveGradedPaper, skipping
+// ungraded), fetches the question→outcome mapping and outcome metadata from the
+// store, then delegates computation to analytics.OutcomeMastery and
+// analytics.LearningGaps.  Response:
+//
+//	{ "outcomes": [...], "gaps": [...], "graded_count": N }
+func (h *AnalyticsHandlers) GetOutcomeMastery(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, avid, subs, ok := h.resolveAVID(w, r)
+	if !ok {
+		return
+	}
+
+	// Collect effective graded papers; skip ungraded (errNotGradedYet) and log
+	// unexpected errors (best-effort analytics).
+	var papers []contracts.GradedPaper
+	for _, sub := range subs {
+		paper, err := effectiveGradedPaper(ctx, h.Store, h.Objects, tenantID, sub)
+		if err != nil {
+			if errors.Is(err, errNotGradedYet) {
+				continue
+			}
+			log.Printf("outcome-mastery: skipping submission %s: %v", sub.ID, err)
+			continue
+		}
+		papers = append(papers, paper)
+	}
+
+	// Fetch question→outcome mappings for this assessment version.
+	qos, err := h.Store.ListQuestionOutcomes(ctx, tenantID, avid)
+	if err != nil {
+		http.Error(w, "store error", http.StatusInternalServerError)
+		return
+	}
+
+	// Build the mapping: question_no → []outcomeID (string).
+	mapping := make(map[string][]string, len(qos))
+	for _, qo := range qos {
+		oidStr := qo.OutcomeID.String()
+		mapping[qo.QuestionNo] = append(mapping[qo.QuestionNo], oidStr)
+	}
+
+	// Fetch outcome metadata (code + description) for the tenant.
+	outcomes, err := h.Store.ListOutcomes(ctx, tenantID)
+	if err != nil {
+		http.Error(w, "store error", http.StatusInternalServerError)
+		return
+	}
+
+	meta := make(map[string]analytics.OutcomeMeta, len(outcomes))
+	for _, o := range outcomes {
+		meta[o.ID.String()] = analytics.OutcomeMeta{
+			Code:        o.Code,
+			Description: o.Description,
+		}
+	}
+
+	// Compute outcome mastery and learning gaps.
+	stats := analytics.OutcomeMastery(papers, mapping, meta)
+	if stats == nil {
+		stats = []analytics.OutcomeStat{}
+	}
+	gaps := analytics.LearningGaps(stats, 5)
+	if gaps == nil {
+		gaps = []analytics.OutcomeStat{}
+	}
+
+	resp := outcomeMasteryResponse{
+		Outcomes:    stats,
+		Gaps:        gaps,
+		GradedCount: len(papers),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

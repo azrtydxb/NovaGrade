@@ -247,6 +247,7 @@ func main() {
 		// Analytics
 		r.Get("/assessment-versions/{avid}/analytics", anah.GetAnalytics)
 		r.Get("/assessment-versions/{avid}/override-stats", anah.GetOverrideStats)
+		r.Get("/assessment-versions/{avid}/outcome-mastery", anah.GetOutcomeMastery)
 		// Moderation (second-marker sampled workflow)
 		r.Post("/assessment-versions/{avid}/moderation", moh.StartSession)
 		r.Post("/moderation/{id}/marks", moh.RecordMark)
