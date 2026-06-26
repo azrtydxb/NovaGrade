@@ -42,7 +42,7 @@ type ApprovalFakeStore struct {
 	reviews     []store.TeacherReview
 	// failAudit forces InsertAuditEvent to return an error.
 	failAudit bool
-	// preloadedFinalGrades holds existing FinalGrade rows for GetFinalGrade to return.
+	// preloadedFinalGrades holds existing FinalGrade rows for test context only — the Approve handler no longer reads FinalGrade (always recompute+upsert).
 	preloadedFinalGrades map[uuid.UUID]store.FinalGrade
 }
 
@@ -108,6 +108,16 @@ func (f *ApprovalFakeStore) InsertFinalGrade(_ context.Context, p store.InsertFi
 		ApprovedBy:   p.ApprovedBy,
 		ApprovedAt:   p.ApprovedAt,
 		CreatedAt:    time.Now(),
+	}
+	// UPSERT: if a FinalGrade already exists for this (TenantID, SubmissionID),
+	// update it in-place to match real DB semantics; otherwise append.
+	for i, existing := range f.finalGrades {
+		if existing.TenantID == p.TenantID && existing.SubmissionID == p.SubmissionID {
+			fg.ID = existing.ID
+			fg.CreatedAt = existing.CreatedAt
+			f.finalGrades[i] = fg
+			return fg, nil
+		}
 	}
 	f.finalGrades = append(f.finalGrades, fg)
 	return fg, nil
