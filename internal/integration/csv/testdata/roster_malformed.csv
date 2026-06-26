@@ -1,0 +1,5 @@
+email,full_name,class
+good@example.com,Good Student,10A
+,Empty Email,10B
+bad-row-too-few-cols
+another@example.com,Another Student,11A

@@ -1,0 +1,6 @@
+sourcedId,username,givenName,familyName,email,role
+s001,alice_s,Alice,Smith,alice@school.edu,student
+t001,mr_jones,Bob,Jones,bob@school.edu,teacher
+s002,carol_w,Carol,White,carol@school.edu,Student
+a001,admin_1,Admin,User,admin@school.edu,administrator
+s003,dave_b,Dave,Brown,,student
