@@ -12,8 +12,10 @@ import (
 
 type Querier interface {
 	CreateSubmission(ctx context.Context, arg CreateSubmissionParams) (Submission, error)
+	DeleteIntegrationConnection(ctx context.Context, arg DeleteIntegrationConnectionParams) (int64, error)
 	FailSubmission(ctx context.Context, arg FailSubmissionParams) (int64, error)
 	GetFinalGrade(ctx context.Context, arg GetFinalGradeParams) (GetFinalGradeRow, error)
+	GetIntegrationConnectionWithCreds(ctx context.Context, arg GetIntegrationConnectionWithCredsParams) (IntegrationConnection, error)
 	// Returns the highest-version marking_guide row for the given tenant + assessment_version.
 	GetLatestGuide(ctx context.Context, arg GetLatestGuideParams) (GetLatestGuideRow, error)
 	GetSubmission(ctx context.Context, id uuid.UUID) (Submission, error)
@@ -30,6 +32,7 @@ type Querier interface {
 	ListAuditEventsBySubmission(ctx context.Context, arg ListAuditEventsBySubmissionParams) ([]AuditEvent, error)
 	// Returns all marking_guide versions for a tenant + assessment_version, newest first.
 	ListGuideVersions(ctx context.Context, arg ListGuideVersionsParams) ([]ListGuideVersionsRow, error)
+	ListIntegrationConnections(ctx context.Context, tenantID uuid.UUID) ([]ListIntegrationConnectionsRow, error)
 	// When $2 is the empty string, no state filter is applied (all states match).
 	ListSubmissionsByState(ctx context.Context, arg ListSubmissionsByStateParams) ([]Submission, error)
 	ListTeacherReviews(ctx context.Context, arg ListTeacherReviewsParams) ([]ListTeacherReviewsRow, error)
@@ -37,6 +40,7 @@ type Querier interface {
 	LockGuide(ctx context.Context, arg LockGuideParams) (int64, error)
 	SetSourcePDFKey(ctx context.Context, arg SetSourcePDFKeyParams) (int64, error)
 	SetSubmissionState(ctx context.Context, arg SetSubmissionStateParams) (int64, error)
+	UpsertIntegrationConnection(ctx context.Context, arg UpsertIntegrationConnectionParams) (IntegrationConnection, error)
 }
 
 var _ Querier = (*Queries)(nil)

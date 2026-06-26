@@ -54,3 +54,20 @@ type GradedPaper struct {
 	Score100      float64            `json:"score_100"`
 	ExpectedTotal *float64           `json:"expected_total"`
 }
+
+// RosterStudent represents a student record imported from a roster source.
+type RosterStudent struct {
+	Email      string `json:"email"`
+	FullName   string `json:"full_name"`
+	ExternalID string `json:"external_id"`
+	ClassLabel string `json:"class_label"`
+}
+
+// GradeRow represents a single row in a grade export.
+type GradeRow struct {
+	StudentName string  `json:"student_name"`
+	QuestionNo  string  `json:"question_no"`
+	Awarded     float64 `json:"awarded"`
+	MaxMarks    float64 `json:"max_marks"`
+	Feedback    string  `json:"feedback"`
+}

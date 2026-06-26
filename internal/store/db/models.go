@@ -115,6 +115,18 @@ type FinalGrade struct {
 	ApprovedAt   pgtype.Timestamptz
 }
 
+type IntegrationConnection struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	Category    string
+	Provider    string
+	Config      []byte
+	Credentials []byte
+	Status      string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type MarkingGuide struct {
 	ID                  uuid.UUID
 	TenantID            uuid.UUID
@@ -254,4 +266,14 @@ type Tunable struct {
 	Value     []byte
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+}
+
+type WebhookSubscription struct {
+	ID        uuid.UUID
+	TenantID  uuid.UUID
+	Event     string
+	Url       string
+	Secret    []byte
+	Active    bool
+	CreatedAt pgtype.Timestamptz
 }
