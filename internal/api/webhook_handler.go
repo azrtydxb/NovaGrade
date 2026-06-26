@@ -162,7 +162,9 @@ func (h *WebhookHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
 
-	// Zero out plaintext secret from memory (best-effort).
+	// Zero out the source plaintext bytes (best-effort).
+	// Note: the base64-encoded copy in resp.Secret is a separate Go string
+	// allocation and cannot be zeroed without memguard.
 	for i := range plainSecret {
 		plainSecret[i] = 0
 	}

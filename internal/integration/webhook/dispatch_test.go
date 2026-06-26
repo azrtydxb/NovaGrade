@@ -106,8 +106,6 @@ func TestDispatch_TwoSubscribers(t *testing.T) {
 
 	fakeStore := &fakeWebhookStore{subs: []store.WebhookSubscriptionWithSecret{sub1, sub2}}
 	fake := &fakeSender{}
-	realSender := webhook.NewSender(5*time.Second, 3)
-	_ = realSender // not used — we use a wrapper
 
 	// Wrap fake into a *Sender-compatible call by using DispatchFunc.
 	// Dispatch takes a *Sender, so use a real Sender but intercept via a test server.

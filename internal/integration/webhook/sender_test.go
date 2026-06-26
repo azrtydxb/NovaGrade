@@ -141,3 +141,33 @@ func TestSender_SecretNotLogged(t *testing.T) {
 	assert.NotContains(t, logOutput, string(secretBytes), "secret must never appear in log output")
 	assert.NotContains(t, logOutput, hex.EncodeToString(secretBytes), "secret hex must never appear in log output")
 }
+
+// TestSender_SecretNotLoggedOnRetry verifies that the secret does not appear in
+// log output even when the server returns 5xx and Deliver retries before failing.
+// This guards against the secret leaking through error-path log statements.
+func TestSender_SecretNotLoggedOnRetry(t *testing.T) {
+	secretBytes := []byte("super-sensitive-webhook-secret!!")
+	var logBuf bytes.Buffer
+
+	// Redirect default logger to our buffer.
+	oldWriter := log.Writer()
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(oldWriter)
+
+	// Server always returns 500 to trigger the retry/error path.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	// 2 attempts with 1ms backoff so the test runs fast.
+	sender := makeTestSender(2, 1*time.Millisecond)
+	event := makeTestEvent()
+
+	// Deliver is expected to return an error after exhausting retries.
+	_ = sender.Deliver(context.Background(), srv.URL, secretBytes, event)
+
+	logOutput := logBuf.String()
+	assert.NotContains(t, logOutput, string(secretBytes), "secret must never appear in log output on retry/failure")
+	assert.NotContains(t, logOutput, hex.EncodeToString(secretBytes), "secret hex must never appear in log output on retry/failure")
+}

@@ -121,7 +121,11 @@ func main() {
 
 	// ── Webhook setup ─────────────────────────────────────────────────────────
 	// encKey may be nil in dev/test — handlers nil-guard against this.
-	encKey, _ := secrets.KeyFromEnv("INTEGRATION_ENC_KEY")
+	encKey, err := secrets.KeyFromEnv("INTEGRATION_ENC_KEY")
+	if err != nil {
+		log.Printf("api: INTEGRATION_ENC_KEY not set or invalid (%v) — webhook features disabled", err)
+		encKey = nil
+	}
 
 	webhookSender := webhook.NewSender(10*time.Second, 3)
 
