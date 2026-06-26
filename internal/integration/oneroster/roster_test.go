@@ -47,6 +47,30 @@ func TestRosterConnector_ImportRoster(t *testing.T) {
 			wantErr:     true,
 			errContains: "missing required column",
 		},
+		{
+			// Provides only name and group — missing sourcedId, givenName, familyName, role.
+			// Expects an error and no students returned.
+			name: "missing required columns — only name and group present",
+			readerFn: func(t *testing.T) io.Reader {
+				return strings.NewReader("name,group\nalice,10A\n")
+			},
+			wantErr:     true,
+			errContains: "missing required column",
+		},
+		{
+			// Explicit test that a student with blank email falls back to username.
+			name: "empty email falls back to username",
+			readerFn: func(t *testing.T) io.Reader {
+				return strings.NewReader(
+					"sourcedId,username,givenName,familyName,email,role\n" +
+						"s003,dave_b,Dave,Brown,,student\n",
+				)
+			},
+			wantLen: 1,
+			wantStudents: []contracts.RosterStudent{
+				{Email: "dave_b", FullName: "Dave Brown", ExternalID: "s003"},
+			},
+		},
 	}
 
 	for _, tc := range tests {

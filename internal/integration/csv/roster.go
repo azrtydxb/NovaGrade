@@ -60,12 +60,11 @@ func (c RosterConnector) ImportRoster(_ context.Context, r io.Reader) ([]contrac
 		}
 
 		// Must have at least enough columns to read email and full_name.
+		// class is optional — do NOT include classIdx here; it is guarded
+		// separately below with "hasClass && classIdx < len(row)".
 		maxRequired := emailIdx
 		if nameIdx > maxRequired {
 			maxRequired = nameIdx
-		}
-		if hasClass && classIdx > maxRequired {
-			maxRequired = classIdx
 		}
 		if len(row) <= maxRequired {
 			malformed = append(malformed, fmt.Sprintf("line %d: wrong column count (%d)", lineNum, len(row)))

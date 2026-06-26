@@ -12,3 +12,6 @@ venv/
 
 # SDD scratch (briefs, reports, ledger, review packages)
 .superpowers/
+
+# Claude Code worktrees (local agent scratch dirs; never commit)
+.claude/worktrees/

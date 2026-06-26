@@ -98,7 +98,9 @@ func (s *Store) ListConnections(ctx context.Context, tenantID uuid.UUID) ([]inte
 	for _, r := range rows {
 		var cfg map[string]any
 		if r.Config != nil {
-			_ = json.Unmarshal(r.Config, &cfg)
+			if err := json.Unmarshal(r.Config, &cfg); err != nil {
+				log.Printf("store: integration_connection %s: bad config json: %v", r.ID, err)
+			}
 		}
 		out = append(out, integration.Connection{
 			ID:        r.ID,

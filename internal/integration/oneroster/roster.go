@@ -109,10 +109,17 @@ func (c RosterConnector) ImportRoster(_ context.Context, r io.Reader) ([]contrac
 		if email == "" && usernameIdx >= 0 && usernameIdx < len(row) {
 			email = strings.TrimSpace(row[usernameIdx])
 		}
+		// Per OneRoster v1.1 spec, email is optional; username is also optional.
+		// Skip rows where neither provides a usable identifier — there is no safe
+		// key to use for grade delivery. (Silent skip matches the non-student
+		// role filtering above; callers can detect via the returned slice length.)
+		if email == "" {
+			continue
+		}
 
 		students = append(students, contracts.RosterStudent{
 			Email:      email,
-			FullName:   givenName + " " + familyName,
+			FullName:   strings.TrimSpace(givenName + " " + familyName),
 			ExternalID: sourcedID,
 			ClassLabel: "",
 		})
