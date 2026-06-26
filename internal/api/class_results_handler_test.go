@@ -32,9 +32,10 @@ import (
 
 type ClassResultsFakeStore struct {
 	*ExportFakeStore
-	mu       sync.Mutex
-	byAVID   map[uuid.UUID][]store.Submission
-	students map[uuid.UUID]store.Student
+	mu         sync.Mutex
+	byAVID     map[uuid.UUID][]store.Submission
+	students   map[uuid.UUID]store.Student
+	avidOwners map[uuid.UUID]uuid.UUID // avid → owning tenantID
 }
 
 func newClassResultsFakeStore() *ClassResultsFakeStore {
@@ -42,6 +43,7 @@ func newClassResultsFakeStore() *ClassResultsFakeStore {
 		ExportFakeStore: newExportFakeStore(),
 		byAVID:          make(map[uuid.UUID][]store.Submission),
 		students:        make(map[uuid.UUID]store.Student),
+		avidOwners:      make(map[uuid.UUID]uuid.UUID),
 	}
 }
 
@@ -65,6 +67,16 @@ func (f *ClassResultsFakeStore) GetStudent(_ context.Context, tenantID, id uuid.
 		return store.Student{}, store.ErrNotFound
 	}
 	return s, nil
+}
+
+func (f *ClassResultsFakeStore) GetAssessmentVersionTenantID(_ context.Context, avid uuid.UUID) (uuid.UUID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	tid, ok := f.avidOwners[avid]
+	if !ok {
+		return uuid.UUID{}, store.ErrNotFound
+	}
+	return tid, nil
 }
 
 // seedGradedSubmission seeds a submission with a graded.v1.json artifact and a
@@ -100,6 +112,7 @@ func (f *ClassResultsFakeStore) seedGradedSubmission(t *testing.T, fakeObjects *
 
 	f.mu.Lock()
 	f.byAVID[avid] = append(f.byAVID[avid], sub)
+	f.avidOwners[avid] = tenantID
 	f.mu.Unlock()
 	return sub
 }
@@ -305,15 +318,9 @@ func TestClassResults_CrossTenant(t *testing.T) {
 	router := buildClassResultsRouter(t, h, auth.NewAPIKeyResolver())
 	router.ServeHTTP(rec, req)
 
-	// The handler returns 200 with header-only CSV (TenantB sees nothing from TenantA).
-	// This tests tenant isolation: no 500, no TenantA data in the response.
-	require.Equal(t, http.StatusOK, rec.Code, "cross-tenant should return 200 with empty result set, body: %s", rec.Body.String())
-
-	r := csv.NewReader(strings.NewReader(rec.Body.String()))
-	rows, err := r.ReadAll()
-	require.NoError(t, err)
-	// TenantB sees header only — TenantA's submissions are filtered out by store.
-	require.Len(t, rows, 1, "cross-tenant: only header row expected (no TenantA data)")
+	// The handler must return 404 — the AVID belongs to TenantA, so TenantB must
+	// not receive any data (not even an empty CSV) to prevent tenant enumeration.
+	require.Equal(t, http.StatusNotFound, rec.Code, "cross-tenant request must return 404, body: %s", rec.Body.String())
 }
 
 // TestClassResults_Forbidden verifies that a user without ActionViewResults

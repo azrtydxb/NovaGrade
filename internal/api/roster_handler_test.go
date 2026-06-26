@@ -204,7 +204,7 @@ func TestImportRoster_EmptyBody(t *testing.T) {
 }
 
 // TestImportRoster_Idempotent verifies that sending the same CSV twice succeeds
-// both times (upsert is idempotent) and each response contains imported >= 0.
+// both times (upsert is idempotent) and each response reports imported == 2.
 func TestImportRoster_Idempotent(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
@@ -234,7 +234,7 @@ func TestImportRoster_Idempotent(t *testing.T) {
 
 		var resp rosterImportResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-		assert.GreaterOrEqual(t, resp.Imported, 0, "attempt %d: imported should be >= 0", i+1)
+		assert.Equal(t, 2, resp.Imported, "attempt %d: imported should be exactly 2", i+1)
 		assert.Empty(t, resp.Errors, "attempt %d: no errors expected for valid CSV", i+1)
 	}
 }

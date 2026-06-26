@@ -144,6 +144,7 @@ func main() {
 
 	ih := &api.IntegrationHandlers{
 		Store:      st,
+		Registry:   reg,
 		DeployMode: deployMode,
 	}
 

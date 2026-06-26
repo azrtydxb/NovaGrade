@@ -646,6 +646,24 @@ func (s *Store) ListSubmissionsByAssessmentVersion(ctx context.Context, tenantID
 	return result, nil
 }
 
+// GetAssessmentVersionTenantID returns the tenant_id that owns the assessment
+// version with the given id. Returns ErrNotFound if no such row exists.
+// This uses a raw pool query because there is no sqlc-generated query for
+// assessment_version lookups without tenant scoping.
+func (s *Store) GetAssessmentVersionTenantID(ctx context.Context, avid uuid.UUID) (uuid.UUID, error) {
+	var tenantID uuid.UUID
+	err := s.pool.QueryRow(ctx,
+		"SELECT tenant_id FROM assessment_version WHERE id = $1", avid,
+	).Scan(&tenantID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return uuid.UUID{}, fmt.Errorf("GetAssessmentVersionTenantID %s: %w", avid, ErrNotFound)
+		}
+		return uuid.UUID{}, fmt.Errorf("store: GetAssessmentVersionTenantID: %w", err)
+	}
+	return tenantID, nil
+}
+
 func studentFromDB(r db.Student) Student {
 	return Student{
 		ID:        r.ID,

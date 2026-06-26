@@ -28,6 +28,10 @@ type ClassResultsStore interface {
 	ExportStore // GetSubmission, GetFinalGrade, ListTeacherReviews
 	ListSubmissionsByAssessmentVersion(ctx context.Context, tenantID, avid uuid.UUID) ([]store.Submission, error)
 	GetStudent(ctx context.Context, tenantID, id uuid.UUID) (store.Student, error)
+	// GetAssessmentVersionTenantID returns the tenant that owns the given
+	// assessment version. Used to distinguish "AVID not found" from "AVID
+	// belongs to another tenant" — both cases return 404 to prevent enumeration.
+	GetAssessmentVersionTenantID(ctx context.Context, avid uuid.UUID) (uuid.UUID, error)
 }
 
 // ClassResultsHandlers holds dependencies for the class-results CSV handler.
@@ -70,6 +74,18 @@ func (h *ClassResultsHandlers) ClassResultsCSV(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		http.Error(w, "store error", http.StatusInternalServerError)
 		return
+	}
+
+	// Cross-tenant 404: if no submissions were found, check whether the AVID
+	// actually belongs to another tenant. If so, return 404 to prevent data
+	// enumeration. If the AVID is unknown (ErrNotFound), return the empty CSV
+	// (no submissions for an unknown assessment version is not a security leak).
+	if len(subs) == 0 {
+		ownerTenantID, lookupErr := h.Store.GetAssessmentVersionTenantID(r.Context(), avid)
+		if lookupErr == nil && ownerTenantID != tenantID {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
 	}
 
 	var rows []contracts.GradeRow
