@@ -21,7 +21,7 @@ import (
 type QuestionStat struct {
 	QuestionNo   string
 	Responses    int     // number of papers that contained this question
-	MaxMarks     float64 // modal MaxMarks across all papers (see MaxMarks policy below)
+	MaxMarks     float64 // first-seen MaxMarks across all papers (see MaxMarks policy below)
 	MeanAwarded  float64 // arithmetic mean of AwardedMarks
 	Difficulty   float64 // MeanAwarded / MaxMarks; 0 if MaxMarks == 0
 	PctFullMarks float64 // fraction of responses where AwardedMarks == MaxMarks
@@ -147,17 +147,24 @@ func ItemAnalysis(papers []contracts.GradedPaper) []QuestionStat {
 		}
 
 		// PctFullMarks, PctZero.
-		fullCount, zeroCount := 0, 0
-		for _, a := range e.awarded {
-			if a == e.maxMarks {
-				fullCount++
+		// When MaxMarks == 0, both percentages are undefined; set to 0.0.
+		var pctFull, pctZero float64
+		if e.maxMarks == 0 {
+			pctFull = 0.0
+			pctZero = 0.0
+		} else {
+			fullCount, zeroCount := 0, 0
+			for _, a := range e.awarded {
+				if a == e.maxMarks {
+					fullCount++
+				}
+				if a == 0 {
+					zeroCount++
+				}
 			}
-			if a == 0 {
-				zeroCount++
-			}
+			pctFull = float64(fullCount) / float64(n)
+			pctZero = float64(zeroCount) / float64(n)
 		}
-		pctFull := float64(fullCount) / float64(n)
-		pctZero := float64(zeroCount) / float64(n)
 
 		// Discrimination: Pearson r of (awarded, paper total).
 		disc := pearson(e.awarded, e.totals)

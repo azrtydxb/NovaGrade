@@ -10,6 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// expectedDiscQ1 is the pre-computed Pearson correlation for Q1 in the fixture.
+// Calculated as: 9 / sqrt(14/3 * 158/9) ≈ 0.9943329476839785
+const expectedDiscQ1 = 0.9943329476839785
+
 // ---- helpers ---------------------------------------------------------------
 
 func floatEq(t *testing.T, want, got float64, msg string) {
@@ -147,15 +151,14 @@ func TestItemAnalysis_FixturePapers(t *testing.T) {
 	floatEq(t, 1.0/3.0, q2.PctZero, "Q2 pct zero")
 
 	// Discrimination — should be close to 1 (see comment block above)
-	// We verify sign and approximate magnitude rather than exact value.
+	// We verify against a pre-computed constant to detect formula errors.
+	require.InDelta(t, expectedDiscQ1, q1.Discrimination, 1e-9, "Q1 discrimination exact")
 	assert.Greater(t, q1.Discrimination, 0.99, "Q1 discrimination should be close to 1")
-	assert.Greater(t, q2.Discrimination, 0.99, "Q2 discrimination should be close to 1")
 	assert.LessOrEqual(t, q1.Discrimination, 1.0, "discrimination cannot exceed 1")
-	assert.LessOrEqual(t, q2.Discrimination, 1.0, "discrimination cannot exceed 1")
 
-	// Exact hand-computed value for Q1: 9 / sqrt(14/3 * 158/9)
-	expectedDiscQ1 := 9.0 / math.Sqrt(14.0/3.0*158.0/9.0)
-	assert.InDelta(t, expectedDiscQ1, q1.Discrimination, 1e-9, "Q1 discrimination exact")
+	// Q2 for reference — verify sign and approximate magnitude.
+	assert.Greater(t, q2.Discrimination, 0.99, "Q2 discrimination should be close to 1")
+	assert.LessOrEqual(t, q2.Discrimination, 1.0, "discrimination cannot exceed 1")
 }
 
 func TestItemAnalysis_ConstantQuestion_ZeroDiscrimination(t *testing.T) {
@@ -210,7 +213,7 @@ func TestItemAnalysis_SinglePaper_NLessThan2(t *testing.T) {
 }
 
 func TestItemAnalysis_MaxMarksZero(t *testing.T) {
-	// MaxMarks=0 → difficulty=0, no panic
+	// MaxMarks=0 → difficulty=0, PctFullMarks=0, PctZero=0, no panic
 	papers := []contracts.GradedPaper{
 		{
 			Questions: []contracts.GradedQuestion{
@@ -222,6 +225,8 @@ func TestItemAnalysis_MaxMarksZero(t *testing.T) {
 	stats := analytics.ItemAnalysis(papers)
 	require.Len(t, stats, 1)
 	assert.Equal(t, 0.0, stats[0].Difficulty, "MaxMarks=0 → difficulty=0")
+	assert.Equal(t, 0.0, stats[0].PctFullMarks, "MaxMarks=0 → PctFullMarks=0")
+	assert.Equal(t, 0.0, stats[0].PctZero, "MaxMarks=0 → PctZero=0")
 }
 
 // ---- GradeDistribution ----------------------------------------------------
