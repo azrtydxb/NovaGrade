@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/azrtydxb/novagrade/internal/integration"
@@ -141,5 +142,5 @@ func TestIntegrationStore(t *testing.T) {
 }
 
 func isIntegrationNotFound(err error) bool {
-	return err != nil && err.Error() == ErrNotFound.Error()
+	return errors.Is(err, ErrNotFound)
 }
