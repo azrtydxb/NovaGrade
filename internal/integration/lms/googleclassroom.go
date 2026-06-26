@@ -3,10 +3,12 @@
 package lms
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -104,7 +106,7 @@ func (c *Connector) doPatch(ctx context.Context, url string, body any) error {
 		return fmt.Errorf("google classroom: marshal body: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(string(b)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewReader(b))
 	if err != nil {
 		return fmt.Errorf("google classroom: build PATCH request: %w", err)
 	}
@@ -123,6 +125,8 @@ func (c *Connector) doPatch(ctx context.Context, url string, body any) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("google classroom: PATCH %s returned %d", url, resp.StatusCode)
 	}
+	// Drain body to allow connection reuse.
+	io.Copy(io.Discard, resp.Body) //nolint:errcheck
 	return nil
 }
 
@@ -211,23 +215,38 @@ func (c *Connector) PullRoster(ctx context.Context) ([]contracts.RosterStudent, 
 // Per-row errors are collected; if any row fails the method returns a combined
 // error after attempting all rows.
 func (c *Connector) PushGrades(ctx context.Context, rows []contracts.GradeRow) error {
-	// 1. Fetch submission list to build userId → submissionId map.
-	subURL := fmt.Sprintf("%s/v1/courses/%s/courseWork/%s/studentSubmissions",
-		c.baseURL(), c.CourseID, c.CourseWorkID)
+	// 1. Fetch ALL submission pages to build a complete userId → submissionId map.
+	// Mirror PullRoster pagination: loop until nextPageToken is empty.
+	submissionByUser := make(map[string]string)
+	pageToken := ""
+	for {
+		subURL := fmt.Sprintf("%s/v1/courses/%s/courseWork/%s/studentSubmissions",
+			c.baseURL(), c.CourseID, c.CourseWorkID)
+		if pageToken != "" {
+			subURL += "?pageToken=" + pageToken
+		}
 
-	var subResp gcSubmissionsListResp
-	if err := c.doGet(ctx, subURL, &subResp); err != nil {
-		return fmt.Errorf("google classroom: fetch submissions: %w", err)
-	}
+		var subResp gcSubmissionsListResp
+		if err := c.doGet(ctx, subURL, &subResp); err != nil {
+			return fmt.Errorf("google classroom: fetch submissions: %w", err)
+		}
 
-	submissionByUser := make(map[string]string, len(subResp.StudentSubmissions))
-	for _, sub := range subResp.StudentSubmissions {
-		submissionByUser[sub.UserID] = sub.ID
+		for _, sub := range subResp.StudentSubmissions {
+			submissionByUser[sub.UserID] = sub.ID
+		}
+
+		if subResp.NextPageToken == "" {
+			break
+		}
+		pageToken = subResp.NextPageToken
 	}
 
 	// 2. PATCH each grade row.
 	var errs []string
 	for _, row := range rows {
+		// TODO(phase5): GradeRow.StudentName is repurposed as the Classroom userId here.
+		// Add a dedicated GradeRow.ExternalID field in the shared contracts (phase-5 contracts
+		// pass) so callers don't pass a display name by mistake.
 		subID, ok := submissionByUser[row.StudentName]
 		if !ok {
 			errs = append(errs, fmt.Sprintf("no submission found for userId %q", row.StudentName))

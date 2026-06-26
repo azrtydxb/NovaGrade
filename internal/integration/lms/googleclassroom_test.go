@@ -181,6 +181,7 @@ func TestPushGrades_Success(t *testing.T) {
 			// Extract submission ID from path: .../studentSubmissions/{id}
 			parts := strings.Split(r.URL.Path, "/")
 			subID := parts[len(parts)-1]
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"), "PATCH must send Content-Type: application/json")
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
 			grade, _ := body["assignedGrade"].(float64)
@@ -280,6 +281,84 @@ func TestPushGrades_401(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, strings.Contains(strings.ToLower(err.Error()), "auth") || strings.Contains(err.Error(), "401"),
 		"expected auth/401 error, got: %v", err)
+}
+
+// TestPushGrades_SubmissionPagination verifies that PushGrades follows nextPageToken
+// across multiple pages of studentSubmissions before PATCHing, so that a student
+// whose submission appears only on the SECOND page is not silently dropped.
+func TestPushGrades_SubmissionPagination(t *testing.T) {
+	type patchRecord struct {
+		submissionID  string
+		assignedGrade float64
+	}
+	var patches []patchRecord
+	calls := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "studentSubmissions") {
+			calls++
+			pageToken := r.URL.Query().Get("pageToken")
+			if pageToken == "" {
+				// First page: uid-001 only; signal a second page.
+				json.NewEncoder(w).Encode(map[string]any{
+					"studentSubmissions": []map[string]any{
+						{"id": "sub-a", "userId": "uid-001", "state": "TURNED_IN"},
+					},
+					"nextPageToken": "page2token",
+				})
+			} else {
+				// Second page: uid-002.
+				json.NewEncoder(w).Encode(map[string]any{
+					"studentSubmissions": []map[string]any{
+						{"id": "sub-b", "userId": "uid-002", "state": "TURNED_IN"},
+					},
+				})
+			}
+			return
+		}
+
+		if r.Method == http.MethodPatch && strings.Contains(r.URL.Path, "studentSubmissions") {
+			parts := strings.Split(r.URL.Path, "/")
+			subID := parts[len(parts)-1]
+			var body map[string]any
+			json.NewDecoder(r.Body).Decode(&body)
+			grade, _ := body["assignedGrade"].(float64)
+			patches = append(patches, patchRecord{submissionID: subID, assignedGrade: grade})
+			json.NewEncoder(w).Encode(map[string]any{"id": subID, "assignedGrade": grade})
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	c := lms.Connector{
+		BaseURL:      srv.URL,
+		CourseID:     "course-101",
+		CourseWorkID: "cw-42",
+		HTTPClient:   srv.Client(),
+		Token:        testToken,
+	}
+
+	rows := []contracts.GradeRow{
+		{StudentName: "uid-001", Awarded: 85, MaxMarks: 100},
+		{StudentName: "uid-002", Awarded: 72, MaxMarks: 100}, // lives on page 2
+	}
+
+	err := c.PushGrades(context.Background(), rows)
+	require.NoError(t, err, "expected no error: uid-002 is on page 2 and must be found")
+
+	assert.Equal(t, 2, calls, "expected 2 GET calls (one per submissions page)")
+
+	require.Len(t, patches, 2, "expected 2 PATCHes: one per student")
+	gradeByID := make(map[string]float64)
+	for _, p := range patches {
+		gradeByID[p.submissionID] = p.assignedGrade
+	}
+	assert.Equal(t, 85.0, gradeByID["sub-a"], "uid-001 grade")
+	assert.Equal(t, 72.0, gradeByID["sub-b"], "uid-002 grade (from page 2)")
 }
 
 // --- Registry test ---
