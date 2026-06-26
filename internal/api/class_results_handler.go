@@ -11,6 +11,8 @@ package api
 
 import (
 	"context"
+	"errors"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -101,6 +103,8 @@ func (h *ClassResultsHandlers) ClassResultsCSV(w http.ResponseWriter, r *http.Re
 		if sub.StudentID != nil {
 			if st, err := h.Store.GetStudent(r.Context(), tenantID, *sub.StudentID); err == nil {
 				studentName = st.FullName
+			} else if !errors.Is(err, store.ErrNotFound) {
+				log.Printf("class-results: GetStudent error for student %s: %v", *sub.StudentID, err)
 			}
 		}
 
@@ -117,5 +121,8 @@ func (h *ClassResultsHandlers) ClassResultsCSV(w http.ResponseWriter, r *http.Re
 
 	w.Header().Set("Content-Type", "text/csv")
 	connector := integrationcsv.GradeConnector{}
-	_ = connector.ExportGrades(r.Context(), w, rows)
+	if err := connector.ExportGrades(r.Context(), w, rows); err != nil {
+		// Headers already sent; cannot change HTTP status. Log the error.
+		log.Printf("class-results: export csv error for avid %s: %v", avid, err)
+	}
 }

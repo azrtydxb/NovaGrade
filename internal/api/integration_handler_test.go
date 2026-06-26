@@ -123,7 +123,9 @@ func TestUpsertIntegration_Created(t *testing.T) {
 
 	tenantID := uuid.New()
 	fakeStore := newIntegrationFakeStore()
-	h := &api.IntegrationHandlers{Store: fakeStore, DeployMode: "onprem"}
+	reg := integration.NewRegistry()
+	integrationcsv.Register(reg)
+	h := &api.IntegrationHandlers{Store: fakeStore, Registry: reg, DeployMode: "onprem"}
 
 	principal := auth.Principal{
 		ID:       "admin-1",
@@ -283,7 +285,9 @@ func TestUpsertIntegration_CredentialsEncrypted(t *testing.T) {
 
 	tenantID := uuid.New()
 	fakeStore := newIntegrationFakeStore()
-	h := &api.IntegrationHandlers{Store: fakeStore, DeployMode: "onprem"}
+	reg := integration.NewRegistry()
+	integrationcsv.Register(reg)
+	h := &api.IntegrationHandlers{Store: fakeStore, Registry: reg, DeployMode: "onprem"}
 
 	principal := auth.Principal{
 		ID:       "admin-1",
@@ -354,6 +358,36 @@ func TestUpsertIntegration_UnknownProvider(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
 	assert.Contains(t, rec.Body.String(), "unknown connector")
+}
+
+// TestUpsertIntegration_NilRegistry verifies that POST /v1/integrations returns
+// HTTP 500 when the handler's Registry is nil (server misconfiguration).
+func TestUpsertIntegration_NilRegistry(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+	t.Setenv("INTEGRATION_ENC_KEY", testEncKey)
+
+	tenantID := uuid.New()
+	fakeStore := newIntegrationFakeStore()
+	// Intentionally leave Registry nil to simulate misconfiguration.
+	h := &api.IntegrationHandlers{Store: fakeStore, DeployMode: "onprem"}
+
+	principal := auth.Principal{
+		ID:       "admin-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleSchoolAdmin},
+	}
+	tok := issueToken(t, principal)
+
+	bodyJSON := `{"category":"roster","provider":"csv"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/integrations", strings.NewReader(bodyJSON))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildIntegrationRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code, "nil registry must return 500, got body: %s", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), "misconfiguration")
 }
 
 // TestDeleteIntegration_CrossTenant verifies that a connection created for

@@ -2,11 +2,13 @@ package oneroster_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/azrtydxb/novagrade/internal/integration"
 	"github.com/azrtydxb/novagrade/internal/integration/oneroster"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 	"github.com/stretchr/testify/assert"
@@ -21,6 +23,7 @@ func TestRosterConnector_ImportRoster(t *testing.T) {
 		errContains  string
 		wantLen      int
 		wantStudents []contracts.RosterStudent
+		wantSkipped  int // expected RosterImportError.Skipped (0 = not checked)
 	}{
 		{
 			name: "students only — role filtering and email fallback",
@@ -80,9 +83,10 @@ func TestRosterConnector_ImportRoster(t *testing.T) {
 						"s004,Frank,Jones,,student\n",
 				)
 			},
-			wantLen: 1,
-			wantErr: true,
+			wantLen:     1,
+			wantErr:     true,
 			errContains: "line 3: student row has no email/username",
+			wantSkipped: 1,
 			wantStudents: []contracts.RosterStudent{
 				{Email: "alice@school.edu", FullName: "Alice Smith", ExternalID: "s001"},
 			},
@@ -96,9 +100,10 @@ func TestRosterConnector_ImportRoster(t *testing.T) {
 						"s005,Bob\n",
 				)
 			},
-			wantLen: 1,
-			wantErr: true,
+			wantLen:     1,
+			wantErr:     true,
 			errContains: "line 3: short row",
+			wantSkipped: 1,
 			wantStudents: []contracts.RosterStudent{
 				{Email: "alice@school.edu", FullName: "Alice Smith", ExternalID: "s001"},
 			},
@@ -130,6 +135,14 @@ func TestRosterConnector_ImportRoster(t *testing.T) {
 				require.Error(t, err)
 				if tc.errContains != "" {
 					assert.Contains(t, err.Error(), tc.errContains)
+				}
+				// For malformed-row errors, assert the typed error and skipped count.
+				if tc.wantSkipped > 0 {
+					var rie *integration.RosterImportError
+					require.True(t, errors.As(err, &rie), "expected *integration.RosterImportError")
+					assert.Equal(t, tc.wantSkipped, rie.Skipped,
+						"RosterImportError.Skipped should equal number of skipped rows")
+					assert.NotEmpty(t, rie.Details, "RosterImportError.Details should list skipped rows")
 				}
 				// When there's an error, still check the returned students (CSV pattern: partial results + error).
 				if tc.wantLen > 0 {

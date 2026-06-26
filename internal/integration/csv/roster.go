@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/azrtydxb/novagrade/internal/integration"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 )
 
@@ -89,7 +90,7 @@ func (c RosterConnector) ImportRoster(_ context.Context, r io.Reader) ([]contrac
 
 	var retErr error
 	if len(malformed) > 0 {
-		retErr = fmt.Errorf("csv roster: skipped %d malformed row(s): %s", len(malformed), strings.Join(malformed, "; "))
+		retErr = &integration.RosterImportError{Skipped: len(malformed), Details: malformed}
 	}
 	return students, retErr
 }

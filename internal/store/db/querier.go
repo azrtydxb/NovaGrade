@@ -14,6 +14,7 @@ type Querier interface {
 	CreateSubmission(ctx context.Context, arg CreateSubmissionParams) (Submission, error)
 	DeleteIntegrationConnection(ctx context.Context, arg DeleteIntegrationConnectionParams) (int64, error)
 	FailSubmission(ctx context.Context, arg FailSubmissionParams) (int64, error)
+	GetAssessmentVersionTenantID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetFinalGrade(ctx context.Context, arg GetFinalGradeParams) (GetFinalGradeRow, error)
 	GetIntegrationConnectionWithCreds(ctx context.Context, arg GetIntegrationConnectionWithCredsParams) (IntegrationConnection, error)
 	// Returns the highest-version marking_guide row for the given tenant + assessment_version.

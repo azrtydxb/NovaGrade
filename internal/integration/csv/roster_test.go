@@ -2,9 +2,11 @@ package csv_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
+	"github.com/azrtydxb/novagrade/internal/integration"
 	csvconn "github.com/azrtydxb/novagrade/internal/integration/csv"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 	"github.com/stretchr/testify/assert"
@@ -13,12 +15,13 @@ import (
 
 func TestRosterConnector_ImportRoster(t *testing.T) {
 	tests := []struct {
-		name          string
-		file          string
-		wantErr       bool
-		errContains   string
-		wantStudents  []contracts.RosterStudent
-		wantLen       int
+		name         string
+		file         string
+		wantErr      bool
+		errContains  string
+		wantStudents []contracts.RosterStudent
+		wantLen      int
+		wantSkipped  int // expected RosterImportError.Skipped (0 = not checked)
 	}{
 		{
 			name:    "happy path",
@@ -36,6 +39,7 @@ func TestRosterConnector_ImportRoster(t *testing.T) {
 			wantErr:     true,
 			errContains: "skipped",
 			wantLen:     2,
+			wantSkipped: 2, // two malformed rows in testdata/roster_malformed.csv (empty email + too-few-cols)
 			wantStudents: []contracts.RosterStudent{
 				{Email: "good@example.com"},
 				{Email: "another@example.com"},
@@ -62,6 +66,14 @@ func TestRosterConnector_ImportRoster(t *testing.T) {
 				require.Error(t, err)
 				if tc.errContains != "" {
 					assert.Contains(t, err.Error(), tc.errContains)
+				}
+				// For malformed-row errors, assert the typed error and skipped count.
+				if tc.wantSkipped > 0 {
+					var rie *integration.RosterImportError
+					require.True(t, errors.As(err, &rie), "expected *integration.RosterImportError")
+					assert.Equal(t, tc.wantSkipped, rie.Skipped,
+						"RosterImportError.Skipped should equal number of malformed rows")
+					assert.NotEmpty(t, rie.Details, "RosterImportError.Details should list skipped rows")
 				}
 			} else {
 				require.NoError(t, err)

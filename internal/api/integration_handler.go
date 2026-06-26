@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -101,11 +102,15 @@ func (h *IntegrationHandlers) UpsertIntegration(w http.ResponseWriter, r *http.R
 	}
 
 	// Validate (category, provider) via registry — 400 if unknown.
-	if h.Registry != nil {
-		if _, ok := h.Registry.Get(integration.Category(req.Category), req.Provider); !ok {
-			http.Error(w, "unknown connector: "+req.Category+"/"+req.Provider, http.StatusBadRequest)
-			return
-		}
+	// Registry is required; a nil registry is a server misconfiguration.
+	if h.Registry == nil {
+		log.Printf("integration: Registry is nil — server misconfiguration")
+		http.Error(w, "server misconfiguration: integration registry unavailable", http.StatusInternalServerError)
+		return
+	}
+	if _, ok := h.Registry.Get(integration.Category(req.Category), req.Provider); !ok {
+		http.Error(w, "unknown connector: "+req.Category+"/"+req.Provider, http.StatusBadRequest)
+		return
 	}
 
 	// Encrypt credentials if provided.

@@ -12,6 +12,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -106,11 +107,15 @@ func (h *RosterHandlers) ImportRoster(w http.ResponseWriter, r *http.Request) {
 	skipped := 0
 	students, importErr := source.ImportRoster(r.Context(), fileReader)
 	if importErr != nil {
-		// The connector returns a single error summarising all skipped/malformed rows.
-		importErrors = append(importErrors, importErr.Error())
-		// Count skipped rows by parsing the connector error when possible.
-		// We count non-nil connector error as skipped rows surfaced to caller.
-		skipped = countSkippedFromErr(importErr)
+		// Extract structured skipped-row info if the connector returned a typed error.
+		var rie *integration.RosterImportError
+		if errors.As(importErr, &rie) {
+			skipped = rie.Skipped
+			importErrors = append(importErrors, rie.Details...)
+		} else {
+			// Non-typed error (e.g. empty file, bad header): report as-is.
+			importErrors = append(importErrors, importErr.Error())
+		}
 	}
 
 	imported := 0
@@ -130,16 +135,3 @@ func (h *RosterHandlers) ImportRoster(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// countSkippedFromErr attempts to extract the number of skipped rows from a
-// connector-level ImportRoster error. The CSV connector embeds the count in
-// the message as "skipped N malformed row(s)"; if unparseable, returns 1.
-func countSkippedFromErr(err error) int {
-	if err == nil {
-		return 0
-	}
-	var n int
-	if _, scanErr := fmt.Sscanf(err.Error(), "csv roster: skipped %d malformed", &n); scanErr == nil && n > 0 {
-		return n
-	}
-	return 1
-}

@@ -2,12 +2,27 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 	"github.com/google/uuid"
 )
+
+// RosterImportError is returned by RosterSource.ImportRoster when one or more
+// rows were skipped. It carries the count of skipped rows and a detail message
+// per row. The partial student list is still returned alongside this error.
+// Callers should use errors.As to extract structured skipped-row information.
+type RosterImportError struct {
+	Skipped int
+	Details []string
+}
+
+func (e *RosterImportError) Error() string {
+	return fmt.Sprintf("roster import: skipped %d row(s): %s", e.Skipped, strings.Join(e.Details, "; "))
+}
 
 // Category identifies the functional role of an integration.
 type Category string

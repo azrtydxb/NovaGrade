@@ -271,5 +271,6 @@ func TestImportRoster_MalformedRows(t *testing.T) {
 	var resp rosterImportResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, 1, resp.Imported, "only the valid row should be imported")
+	assert.Equal(t, 1, resp.Skipped, "skipped count must equal number of malformed rows (via RosterImportError)")
 	assert.GreaterOrEqual(t, len(resp.Errors), 1, "malformed row should be reported as an error")
 }

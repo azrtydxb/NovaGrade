@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/azrtydxb/novagrade/internal/integration"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 )
 
@@ -132,7 +133,7 @@ func (c RosterConnector) ImportRoster(_ context.Context, r io.Reader) ([]contrac
 
 	var retErr error
 	if len(skipped) > 0 {
-		retErr = fmt.Errorf("oneroster: skipped %d row(s): %s", len(skipped), strings.Join(skipped, "; "))
+		retErr = &integration.RosterImportError{Skipped: len(skipped), Details: skipped}
 	}
 	return students, retErr
 }
