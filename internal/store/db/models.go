@@ -96,6 +96,15 @@ type Course struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type CurriculumOutcome struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	Code        string
+	Description string
+	Subject     string
+	CreatedAt   pgtype.Timestamptz
+}
+
 type Department struct {
 	ID        uuid.UUID
 	TenantID  uuid.UUID
@@ -203,6 +212,15 @@ type Question struct {
 	Sequence            int32
 	Stem                string
 	MaxMarks            pgtype.Numeric
+	CreatedAt           pgtype.Timestamptz
+}
+
+type QuestionOutcome struct {
+	ID                  uuid.UUID
+	TenantID            uuid.UUID
+	AssessmentVersionID uuid.UUID
+	QuestionNo          string
+	OutcomeID           uuid.UUID
 	CreatedAt           pgtype.Timestamptz
 }
 

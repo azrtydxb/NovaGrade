@@ -202,6 +202,11 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	cuh := &api.CurriculumHandlers{
+		Store:      st,
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -251,6 +256,11 @@ func main() {
 		r.Get("/appeals", aph.ListAppeals)
 		r.Post("/appeals/{id}/resolve", aph.ResolveAppeal)
 		r.Post("/appeals/{id}/regrade", aph.RegradeAppeal)
+		// Curriculum outcomes + question→outcome mapping
+		r.Post("/outcomes", cuh.CreateOutcome)
+		r.Get("/outcomes", cuh.ListOutcomes)
+		r.Post("/assessment-versions/{avid}/question-outcomes", cuh.MapQuestionOutcome)
+		r.Get("/assessment-versions/{avid}/question-outcomes", cuh.ListQuestionOutcomes)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
