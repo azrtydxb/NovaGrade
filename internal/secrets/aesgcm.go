@@ -48,7 +48,7 @@ func Decrypt(key, blob []byte) ([]byte, error) {
 		return nil, fmt.Errorf("secrets: new GCM: %w", err)
 	}
 	nonceSize := gcm.NonceSize()
-	if len(blob) < nonceSize+1 {
+	if len(blob) < nonceSize+gcm.Overhead() {
 		return nil, errors.New("secrets: blob too short")
 	}
 	nonce, ciphertext := blob[:nonceSize], blob[nonceSize:]

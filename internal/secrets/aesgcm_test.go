@@ -3,7 +3,6 @@ package secrets_test
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"os"
 	"testing"
 
 	"github.com/azrtydxb/novagrade/internal/secrets"
@@ -67,8 +66,7 @@ func TestNon32ByteKeyErrors(t *testing.T) {
 func TestKeyFromEnv(t *testing.T) {
 	key := newKey(t)
 	encoded := base64.StdEncoding.EncodeToString(key)
-	os.Setenv("TEST_SECRET_KEY", encoded)
-	defer os.Unsetenv("TEST_SECRET_KEY")
+	t.Setenv("TEST_SECRET_KEY", encoded)
 
 	got, err := secrets.KeyFromEnv("TEST_SECRET_KEY")
 	if err != nil {
