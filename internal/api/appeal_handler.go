@@ -204,6 +204,10 @@ func (h *AppealHandlers) ResolveAppeal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
+	if body.Status != "resolved" && body.Status != "rejected" {
+		http.Error(w, "status must be 'resolved' or 'rejected'", http.StatusBadRequest)
+		return
+	}
 
 	// Audit-first.
 	appealIDPtr := appealID
