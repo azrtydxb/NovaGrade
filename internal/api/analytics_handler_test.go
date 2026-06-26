@@ -510,8 +510,8 @@ func TestGetOutcomeMastery_OK(t *testing.T) {
 	expectedAlphaMeanPct := 30.0 / 45.0 // 0.6666...
 	assert.InDelta(t, expectedAlphaMeanPct, alphaMeanPct, 1e-9, "ALPHA mean_pct must be exactly 30/45")
 
-	// Verify mastery field is valid.
-	assert.Contains(t, []string{"secure", "developing", "emerging"}, alphaResp["mastery"])
+	// Verify exact mastery bucket: 30/45 ≈ 0.667 is in [0.5, 0.75) → "developing".
+	assert.Equal(t, "developing", alphaResp["mastery"], "ALPHA 30/45 → developing")
 
 	// Verify exact MeanPct for BETA.
 	// makeGradedPaperWithFlags produces: Q2=(3/5)
@@ -522,6 +522,8 @@ func TestGetOutcomeMastery_OK(t *testing.T) {
 	require.True(t, ok, "BETA mean_pct must be float64")
 	expectedBetaMeanPct := 9.0 / 15.0 // 0.6
 	assert.InDelta(t, expectedBetaMeanPct, betaMeanPct, 1e-9, "BETA mean_pct must be exactly 9/15")
+	// BETA 9/15 = 0.6 is in [0.5, 0.75) → "developing".
+	assert.Equal(t, "developing", betaResp["mastery"], "BETA 9/15 → developing")
 
 	// Gaps: sorted by MeanPct ascending (weakest first). BETA < ALPHA.
 	require.NotEmpty(t, resp.Gaps, "gaps must not be empty")
