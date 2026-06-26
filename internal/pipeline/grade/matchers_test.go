@@ -14,6 +14,10 @@ import (
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+// f64 returns a pointer to a float64 value, used for GuideEntry.NumericAnswer
+// and StepEntry.NumericAnswer which are *float64 to distinguish absent from zero.
+func f64(v float64) *float64 { return &v }
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Numeric matcher
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,7 +34,7 @@ func TestMatchNumeric_AbsoluteTolerance(t *testing.T) {
 			name: "exact match abs tol=0",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 9.81, Tolerance: 0, ToleranceType: "abs",
+				NumericAnswer: f64(9.81), Tolerance: 0, ToleranceType: "abs",
 			},
 			answer:    "9.81",
 			wantMarks: 4,
@@ -40,7 +44,7 @@ func TestMatchNumeric_AbsoluteTolerance(t *testing.T) {
 			name: "within abs tolerance",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 9.81, Tolerance: 0.05, ToleranceType: "abs",
+				NumericAnswer: f64(9.81), Tolerance: 0.05, ToleranceType: "abs",
 			},
 			answer:    "9.83",
 			wantMarks: 4,
@@ -50,7 +54,7 @@ func TestMatchNumeric_AbsoluteTolerance(t *testing.T) {
 			name: "outside abs tolerance",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 9.81, Tolerance: 0.05, ToleranceType: "abs",
+				NumericAnswer: f64(9.81), Tolerance: 0.05, ToleranceType: "abs",
 			},
 			answer:    "9.90",
 			wantMarks: 0,
@@ -60,7 +64,7 @@ func TestMatchNumeric_AbsoluteTolerance(t *testing.T) {
 			name: "boundary exactly at tolerance edge (inclusive)",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 10.0, Tolerance: 0.1, ToleranceType: "abs",
+				NumericAnswer: f64(10.0), Tolerance: 0.1, ToleranceType: "abs",
 			},
 			answer:    "10.1",
 			wantMarks: 4,
@@ -70,7 +74,7 @@ func TestMatchNumeric_AbsoluteTolerance(t *testing.T) {
 			name: "non-numeric answer → 0 marks",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 9.81, Tolerance: 0.05, ToleranceType: "abs",
+				NumericAnswer: f64(9.81), Tolerance: 0.05, ToleranceType: "abs",
 			},
 			answer:    "not a number",
 			wantMarks: 0,
@@ -98,7 +102,7 @@ func TestMatchNumeric_PercentTolerance(t *testing.T) {
 			name: "within pct tolerance (5%)",
 			entry: grade.GuideEntry{
 				MaxMarks: 3, Match: "numeric",
-				NumericAnswer: 100.0, Tolerance: 5, ToleranceType: "pct",
+				NumericAnswer: f64(100.0), Tolerance: 5, ToleranceType: "pct",
 			},
 			answer:    "104",
 			wantMarks: 3,
@@ -107,7 +111,7 @@ func TestMatchNumeric_PercentTolerance(t *testing.T) {
 			name: "outside pct tolerance (5%)",
 			entry: grade.GuideEntry{
 				MaxMarks: 3, Match: "numeric",
-				NumericAnswer: 100.0, Tolerance: 5, ToleranceType: "pct",
+				NumericAnswer: f64(100.0), Tolerance: 5, ToleranceType: "pct",
 			},
 			answer:    "106",
 			wantMarks: 0,
@@ -116,7 +120,7 @@ func TestMatchNumeric_PercentTolerance(t *testing.T) {
 			name: "exactly at pct tolerance boundary (inclusive)",
 			entry: grade.GuideEntry{
 				MaxMarks: 3, Match: "numeric",
-				NumericAnswer: 100.0, Tolerance: 5, ToleranceType: "pct",
+				NumericAnswer: f64(100.0), Tolerance: 5, ToleranceType: "pct",
 			},
 			answer:    "95",
 			wantMarks: 3,
@@ -142,7 +146,7 @@ func TestMatchNumeric_UnitStripping(t *testing.T) {
 			name: "numeric value with unit stripped before parsing",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 9.81, Tolerance: 0.05, ToleranceType: "abs",
+				NumericAnswer: f64(9.81), Tolerance: 0.05, ToleranceType: "abs",
 				Unit: "m/s^2",
 			},
 			answer:    "9.83 m/s^2",
@@ -152,7 +156,7 @@ func TestMatchNumeric_UnitStripping(t *testing.T) {
 			name: "no unit in student answer (unit not required for value marks)",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 9.81, Tolerance: 0.05, ToleranceType: "abs",
+				NumericAnswer: f64(9.81), Tolerance: 0.05, ToleranceType: "abs",
 				Unit: "m/s^2",
 			},
 			answer:    "9.82",
@@ -184,7 +188,7 @@ func TestMatchNumeric_UnitMarks(t *testing.T) {
 			name: "value correct + unit correct → full marks",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 9.81, Tolerance: 0.05, ToleranceType: "abs",
+				NumericAnswer: f64(9.81), Tolerance: 0.05, ToleranceType: "abs",
 				Unit: "m/s^2", UnitMarks: 1,
 			},
 			answer:    "9.83 m/s^2",
@@ -195,7 +199,7 @@ func TestMatchNumeric_UnitMarks(t *testing.T) {
 			name: "value correct + unit wrong → value marks only (max - unit_marks)",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 9.81, Tolerance: 0.05, ToleranceType: "abs",
+				NumericAnswer: f64(9.81), Tolerance: 0.05, ToleranceType: "abs",
 				Unit: "m/s^2", UnitMarks: 1,
 			},
 			answer:    "9.83 N",
@@ -206,7 +210,7 @@ func TestMatchNumeric_UnitMarks(t *testing.T) {
 			name: "value correct + unit missing → value marks only",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 9.81, Tolerance: 0.05, ToleranceType: "abs",
+				NumericAnswer: f64(9.81), Tolerance: 0.05, ToleranceType: "abs",
 				Unit: "m/s^2", UnitMarks: 1,
 			},
 			answer:    "9.82",
@@ -217,7 +221,7 @@ func TestMatchNumeric_UnitMarks(t *testing.T) {
 			name: "value wrong → 0 marks regardless of unit",
 			entry: grade.GuideEntry{
 				MaxMarks: 4, Match: "numeric",
-				NumericAnswer: 9.81, Tolerance: 0.05, ToleranceType: "abs",
+				NumericAnswer: f64(9.81), Tolerance: 0.05, ToleranceType: "abs",
 				Unit: "m/s^2", UnitMarks: 1,
 			},
 			answer:    "5.0 m/s^2",
@@ -308,7 +312,7 @@ func TestMatchMultiStep_NumericStep(t *testing.T) {
 		Match:    "multi_step",
 		Steps: []grade.StepEntry{
 			{Accept: []string{"F=ma"}, Marks: 1, Match: "set"},
-			{Marks: 2, Match: "numeric", NumericAnswer: 20.0, Tolerance: 0.5, ToleranceType: "abs"},
+			{Marks: 2, Match: "numeric", NumericAnswer: f64(20.0), Tolerance: 0.5, ToleranceType: "abs"},
 		},
 	}
 
@@ -488,7 +492,7 @@ func TestGuideMarkScheme_Numeric_NoProviderCall(t *testing.T) {
 	guide := grade.Guide{
 		"Q1": grade.GuideEntry{
 			MaxMarks: 4, Match: "numeric",
-			NumericAnswer: 9.81, Tolerance: 0.05, ToleranceType: "abs",
+			NumericAnswer: f64(9.81), Tolerance: 0.05, ToleranceType: "abs",
 		},
 	}
 	fallback := grade.NewLLMJudge(fallbackMock, "fallback-model")

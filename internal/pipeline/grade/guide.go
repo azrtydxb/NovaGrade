@@ -24,7 +24,8 @@ const rubricPrompt = `You are grading one exam question strictly against the off
 //   - Accept:        list of acceptable answers (for set step match types)
 //   - Marks:         marks awarded when this step matches
 //   - Match:         step match type: "exact", "exact_ci", "set", or "numeric"
-//   - NumericAnswer: expected numeric value (for numeric step match type)
+//   - NumericAnswer: expected numeric value (for numeric step match type); pointer to
+//                   distinguish absent from zero (ValidateGuide rejects nil for numeric steps)
 //   - Tolerance:     tolerance value for numeric step matching
 //   - ToleranceType: "abs" or "pct" for numeric step matching
 type StepEntry struct {
@@ -32,7 +33,7 @@ type StepEntry struct {
 	Accept        []string `json:"accept,omitempty"`
 	Marks         float64  `json:"marks"`
 	Match         string   `json:"match"`
-	NumericAnswer float64  `json:"numeric_answer,omitempty"`
+	NumericAnswer *float64 `json:"numeric_answer,omitempty"`
 	Tolerance     float64  `json:"tolerance,omitempty"`
 	ToleranceType string   `json:"tolerance_type,omitempty"`
 }
@@ -83,8 +84,10 @@ type GuideEntry struct {
 	Normalize bool    `json:"normalize,omitempty"`
 
 	// numeric match type fields
-	NumericAnswer float64 `json:"numeric_answer,omitempty"`
-	Tolerance     float64 `json:"tolerance,omitempty"`
+	// NumericAnswer is a pointer so JSON unmarshalling can distinguish absent from zero.
+	// ValidateGuide rejects nil for numeric match entries; zero is a valid expected answer.
+	NumericAnswer *float64 `json:"numeric_answer,omitempty"`
+	Tolerance     float64  `json:"tolerance,omitempty"`
 	ToleranceType string  `json:"tolerance_type,omitempty"`
 	Unit          string  `json:"unit,omitempty"`
 	UnitMarks     float64 `json:"unit_marks,omitempty"`

@@ -324,7 +324,7 @@ func TestImportGuide_Unauthenticated_401(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
-func TestImportGuide_LackingEditTunables_403(t *testing.T) {
+func TestImportGuide_LackingEditTunables_404(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
 	tenantID := uuid.New()
@@ -349,8 +349,8 @@ func TestImportGuide_LackingEditTunables_403(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	// 403 on explicit access denial (not a resource lookup — no submission to 404 on)
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+	// 404, not 403 — prevents role/tenant enumeration (matches authz.go convention)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -592,7 +592,7 @@ func TestLockGuide_DoesNotBlockNewVersion(t *testing.T) {
 	assert.Equal(t, 2, fakeGuideStore.GuideCount())
 }
 
-func TestLockGuide_LackingEditTunables_403(t *testing.T) {
+func TestLockGuide_LackingEditTunables_404(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
 	tenantID := uuid.New()
@@ -632,7 +632,8 @@ func TestLockGuide_LackingEditTunables_403(t *testing.T) {
 	lockRec := httptest.NewRecorder()
 	router.ServeHTTP(lockRec, lockReq)
 
-	assert.Equal(t, http.StatusForbidden, lockRec.Code)
+	// 404, not 403 — prevents role/tenant enumeration (matches authz.go convention)
+	assert.Equal(t, http.StatusNotFound, lockRec.Code)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

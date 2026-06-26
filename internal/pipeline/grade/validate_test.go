@@ -19,13 +19,13 @@ func TestValidateGuide_ValidGuide_AllMatchTypes(t *testing.T) {
 		"Q2": {MaxMarks: 2, Match: "exact_ci", Answer: "h2o"},
 		"Q3": {MaxMarks: 1, Match: "set", Accept: []string{"cat", "feline"}},
 		"Q4": {MaxMarks: 5, Match: "rubric", Rubric: "Award marks for explaining entropy."},
-		"Q5": {MaxMarks: 3, Match: "numeric", NumericAnswer: 9.81},
+		"Q5": {MaxMarks: 3, Match: "numeric", NumericAnswer: f64(9.81)},
 		"Q6": {
 			MaxMarks: 4,
 			Match:    "multi_step",
 			Steps: []grade.StepEntry{
 				{Marks: 1, Match: "exact", Answer: "KE = 0.5mv^2"},
-				{Marks: 3, Match: "numeric", NumericAnswer: 50},
+				{Marks: 3, Match: "numeric", NumericAnswer: f64(50)},
 			},
 		},
 		"Q7": {
@@ -97,11 +97,22 @@ func TestValidateGuide_RubricWithEmptyRubric(t *testing.T) {
 }
 
 func TestValidateGuide_NumericMissingNumericAnswer_ZeroIsAllowed(t *testing.T) {
-	// Zero is a valid expected numeric answer.
+	// Zero is a valid expected numeric answer when explicitly provided (non-nil pointer).
 	g := grade.Guide{
-		"Q5": {MaxMarks: 3, Match: "numeric", NumericAnswer: 0},
+		"Q5": {MaxMarks: 3, Match: "numeric", NumericAnswer: f64(0)},
 	}
 	require.NoError(t, grade.ValidateGuide(g))
+}
+
+func TestValidateGuide_NumericMissingNumericAnswer_NilRejected(t *testing.T) {
+	// A numeric entry with no numeric_answer field (nil pointer) must be rejected.
+	g := grade.Guide{
+		"Q5": {MaxMarks: 3, Match: "numeric"},
+	}
+	err := grade.ValidateGuide(g)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Q5")
+	assert.Contains(t, err.Error(), "numeric_answer")
 }
 
 func TestValidateGuide_MultiStepWithNoSteps(t *testing.T) {
@@ -156,4 +167,42 @@ func TestValidateGuide_MultipleErrors_AllReported(t *testing.T) {
 func TestValidateGuideJSON_InvalidJSON(t *testing.T) {
 	err := grade.ValidateGuideJSON([]byte(`{not valid json`))
 	require.Error(t, err)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fix 3: exact / exact_ci must have a non-empty answer field
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestValidateGuide_ExactMissingAnswer_Rejected(t *testing.T) {
+	g := grade.Guide{
+		"Q1": {MaxMarks: 2, Match: "exact"},
+	}
+	err := grade.ValidateGuide(g)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Q1")
+	assert.Contains(t, err.Error(), "answer")
+}
+
+func TestValidateGuide_ExactCI_MissingAnswer_Rejected(t *testing.T) {
+	g := grade.Guide{
+		"Q2": {MaxMarks: 2, Match: "exact_ci"},
+	}
+	err := grade.ValidateGuide(g)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Q2")
+	assert.Contains(t, err.Error(), "answer")
+}
+
+func TestValidateGuide_ExactWithAnswer_Valid(t *testing.T) {
+	g := grade.Guide{
+		"Q1": {MaxMarks: 2, Match: "exact", Answer: "Paris"},
+	}
+	require.NoError(t, grade.ValidateGuide(g))
+}
+
+func TestValidateGuide_ExactCI_WithAnswer_Valid(t *testing.T) {
+	g := grade.Guide{
+		"Q2": {MaxMarks: 2, Match: "exact_ci", Answer: "h2o"},
+	}
+	require.NoError(t, grade.ValidateGuide(g))
 }

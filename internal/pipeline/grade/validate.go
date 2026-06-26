@@ -19,12 +19,13 @@ var knownMatchTypes = map[string]bool{
 // ValidateGuide validates the content of a Guide.  It checks:
 //   - Every entry has a known match type (exact/exact_ci/set/rubric/numeric/multi_step/partial).
 //   - Required fields are present per match type:
-//     set      → at least one accept value
-//     rubric   → non-empty rubric string
-//     numeric  → numeric_answer present (non-zero is required; zero is allowed only
-//                when zero is a meaningful expected answer — callers may pass any value)
-//     multi_step → at least one step
-//     partial  → at least one criterion with at least one accept value
+//     exact / exact_ci → non-empty answer field
+//     set              → at least one accept value
+//     rubric           → non-empty rubric string
+//     numeric          → numeric_answer must be explicitly present (non-nil pointer);
+//                        zero is a valid expected answer but absent is rejected
+//     multi_step       → at least one step; numeric steps must have numeric_answer present
+//     partial          → at least one criterion with at least one accept value
 //   - max_marks >= 0 for every entry.
 //
 // The function returns a single error that lists every offending question_no and
@@ -45,6 +46,10 @@ func ValidateGuide(g Guide) error {
 		} else {
 			// per-type required field checks (only when the match type is known)
 			switch e.Match {
+			case "exact", "exact_ci":
+				if strings.TrimSpace(e.Answer) == "" {
+					entryErrs = append(entryErrs, fmt.Sprintf("%s match requires a non-empty answer field", e.Match))
+				}
 			case "set":
 				if len(e.Accept) == 0 {
 					entryErrs = append(entryErrs, "set match requires at least one accept value")
@@ -54,14 +59,11 @@ func ValidateGuide(g Guide) error {
 					entryErrs = append(entryErrs, "rubric match requires a non-empty rubric string")
 				}
 			case "numeric":
-				// numeric_answer is a float64 field; zero is a valid expected answer.
-				// We do not reject zero. The only check is that the field must be
-				// explicitly present — JSON unmarshalling gives 0 for absent fields.
-				// Since Go cannot distinguish "field absent" from "field is 0" without
-				// a pointer, we accept zero as a valid numeric_answer.  If callers want
-				// stricter validation they can add a dedicated JSON schema layer.
-				// No additional check needed: the field always has a value.
-				_ = e.NumericAnswer
+				// numeric_answer is *float64; nil means the field was absent from the JSON.
+				// Zero is a valid expected answer; absent is rejected so callers must be explicit.
+				if e.NumericAnswer == nil {
+					entryErrs = append(entryErrs, "numeric match requires numeric_answer to be present (use 0 for an expected answer of zero)")
+				}
 			case "multi_step":
 				if len(e.Steps) == 0 {
 					entryErrs = append(entryErrs, "multi_step match requires at least one step")
@@ -69,6 +71,9 @@ func ValidateGuide(g Guide) error {
 					for i, s := range e.Steps {
 						if !knownMatchTypes[s.Match] && s.Match != "" {
 							entryErrs = append(entryErrs, fmt.Sprintf("step[%d] has unknown match type %q", i, s.Match))
+						}
+						if s.Match == "numeric" && s.NumericAnswer == nil {
+							entryErrs = append(entryErrs, fmt.Sprintf("step[%d] numeric match requires numeric_answer to be present", i))
 						}
 					}
 				}

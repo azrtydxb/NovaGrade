@@ -116,6 +116,14 @@ func MatchNumeric(entry GuideEntry, studentAnswer string) (float64, float64, str
 		tolType = "abs"
 	}
 
+	// Dereference the numeric_answer pointer.
+	// nil here is a programming error: ValidateGuide rejects nil at import time.
+	// Treat nil as 0 (awards 0 marks since no real answer can match "unset").
+	var expectedAnswer float64
+	if entry.NumericAnswer != nil {
+		expectedAnswer = *entry.NumericAnswer
+	}
+
 	// ── unit stripping / detection ──────────────────────────────────────────
 	unitCorrect := false
 	toParse := strings.TrimSpace(studentAnswer)
@@ -148,14 +156,14 @@ func MatchNumeric(entry GuideEntry, studentAnswer string) (float64, float64, str
 	}
 
 	// ── tolerance check ──────────────────────────────────────────────────────
-	diff := math.Abs(parsed - entry.NumericAnswer)
+	diff := math.Abs(parsed - expectedAnswer)
 	var inTolerance bool
 	switch tolType {
 	case "pct":
-		if entry.NumericAnswer == 0 {
+		if expectedAnswer == 0 {
 			inTolerance = diff == 0
 		} else {
-			pctDiff := diff / math.Abs(entry.NumericAnswer) * 100
+			pctDiff := diff / math.Abs(expectedAnswer) * 100
 			inTolerance = pctDiff <= entry.Tolerance
 		}
 	default: // "abs"
@@ -165,7 +173,7 @@ func MatchNumeric(entry GuideEntry, studentAnswer string) (float64, float64, str
 	if !inTolerance {
 		return 0, 1.0, fmt.Sprintf(
 			"value %g is outside tolerance (expected %g ±%g %s)",
-			parsed, entry.NumericAnswer, entry.Tolerance, tolType,
+			parsed, expectedAnswer, entry.Tolerance, tolType,
 		)
 	}
 
@@ -188,7 +196,7 @@ func MatchNumeric(entry GuideEntry, studentAnswer string) (float64, float64, str
 
 	// No unit_marks: full marks for a value within tolerance.
 	return maxMarks, 1.0, fmt.Sprintf(
-		"value %g is within tolerance of %g (±%g %s)", parsed, entry.NumericAnswer, entry.Tolerance, tolType,
+		"value %g is within tolerance of %g (±%g %s)", parsed, expectedAnswer, entry.Tolerance, tolType,
 	)
 }
 

@@ -11,9 +11,8 @@ package api
 // RBAC:
 //   All four endpoints require ActionEditTunables.
 //   Roles that hold this action: operator, group_admin, school_admin.
-//   Teacher and scanner are denied → 403 (guide routes are not per-resource lookups
-//   so we use explicit 403, not 404-not-403; cross-tenant isolation is enforced by
-//   scoping ALL store calls to the principal's own tenant).
+//   Teacher and scanner are denied → 404 (404-not-403 to avoid role/tenant
+//   enumeration, consistent with fetchAndAuthorize in authz.go).
 //
 // Tenant-scoping approach:
 //   Guide store calls always use p.TenantID (the caller's tenant) as the tenant
@@ -78,7 +77,8 @@ func (h *GuideHandlers) guideAuthz(w http.ResponseWriter, r *http.Request) (auth
 		DeployMode:       h.DeployMode,
 	}
 	if !domain.Can(p.Roles, domain.ActionEditTunables, rctx) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		// 404, not 403 — prevents role/tenant enumeration (matches authz.go convention).
+		http.Error(w, "not found", http.StatusNotFound)
 		return auth.Principal{}, uuid.UUID{}, false
 	}
 	tenantID, err := uuid.Parse(p.TenantID)
