@@ -355,3 +355,154 @@ func TestInsertFinalGrade_UpsertsOnConflict(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, count, "must be exactly one final_grade row after upsert")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Curriculum outcome tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestCurriculum_CreateOutcome(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	tenantID := mustCreateSchool(t, st)
+
+	o, err := st.CreateOutcome(ctx, CreateOutcomeParams{
+		TenantID:    tenantID,
+		Code:        "MA1.1",
+		Description: "Add and subtract integers",
+		Subject:     "math",
+	})
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, o.ID)
+	require.Equal(t, tenantID, o.TenantID)
+	require.Equal(t, "MA1.1", o.Code)
+	require.Equal(t, "Add and subtract integers", o.Description)
+	require.Equal(t, "math", o.Subject)
+	require.False(t, o.CreatedAt.IsZero())
+
+	// GetOutcome round-trips.
+	got, err := st.GetOutcome(ctx, tenantID, o.ID)
+	require.NoError(t, err)
+	require.Equal(t, o.ID, got.ID)
+	require.Equal(t, "MA1.1", got.Code)
+
+	// ListOutcomes returns it.
+	list, err := st.ListOutcomes(ctx, tenantID)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.Equal(t, o.ID, list[0].ID)
+}
+
+func TestCurriculum_DuplicateCode_UniqueViolation(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	tenantID := mustCreateSchool(t, st)
+
+	_, err := st.CreateOutcome(ctx, CreateOutcomeParams{
+		TenantID:    tenantID,
+		Code:        "MA1.1",
+		Description: "first",
+		Subject:     "math",
+	})
+	require.NoError(t, err)
+
+	// Same (tenant, code) again → unique violation surfaced as an error.
+	_, err = st.CreateOutcome(ctx, CreateOutcomeParams{
+		TenantID:    tenantID,
+		Code:        "MA1.1",
+		Description: "second",
+		Subject:     "math",
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrDuplicate)
+}
+
+func TestCurriculum_MapQuestion(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	tenantID := mustCreateSchool(t, st)
+	avID := mustCreateAVForTenant(t, st, tenantID)
+
+	o, err := st.CreateOutcome(ctx, CreateOutcomeParams{
+		TenantID:    tenantID,
+		Code:        "MA1.1",
+		Description: "Add integers",
+		Subject:     "math",
+	})
+	require.NoError(t, err)
+
+	qo, err := st.MapQuestionOutcome(ctx, MapQuestionOutcomeParams{
+		TenantID:            tenantID,
+		AssessmentVersionID: avID,
+		QuestionNo:          "1a",
+		OutcomeID:           o.ID,
+	})
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, qo.ID)
+	require.Equal(t, tenantID, qo.TenantID)
+	require.Equal(t, avID, qo.AssessmentVersionID)
+	require.Equal(t, "1a", qo.QuestionNo)
+	require.Equal(t, o.ID, qo.OutcomeID)
+	require.False(t, qo.CreatedAt.IsZero())
+}
+
+func TestCurriculum_ListMappings(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	tenantID := mustCreateSchool(t, st)
+	avID := mustCreateAVForTenant(t, st, tenantID)
+
+	o1, err := st.CreateOutcome(ctx, CreateOutcomeParams{
+		TenantID: tenantID, Code: "MA1.1", Description: "d1", Subject: "math",
+	})
+	require.NoError(t, err)
+	o2, err := st.CreateOutcome(ctx, CreateOutcomeParams{
+		TenantID: tenantID, Code: "MA1.2", Description: "d2", Subject: "math",
+	})
+	require.NoError(t, err)
+
+	_, err = st.MapQuestionOutcome(ctx, MapQuestionOutcomeParams{
+		TenantID: tenantID, AssessmentVersionID: avID, QuestionNo: "1a", OutcomeID: o1.ID,
+	})
+	require.NoError(t, err)
+	_, err = st.MapQuestionOutcome(ctx, MapQuestionOutcomeParams{
+		TenantID: tenantID, AssessmentVersionID: avID, QuestionNo: "1b", OutcomeID: o2.ID,
+	})
+	require.NoError(t, err)
+
+	list, err := st.ListQuestionOutcomes(ctx, tenantID, avID)
+	require.NoError(t, err)
+	require.Len(t, list, 2)
+	// Ordered by question_no.
+	require.Equal(t, "1a", list[0].QuestionNo)
+	require.Equal(t, "1b", list[1].QuestionNo)
+}
+
+func TestCurriculum_CrossTenantList(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	tenant1 := mustCreateSchool(t, st)
+	tenant2 := mustCreateSchool(t, st)
+
+	_, err := st.CreateOutcome(ctx, CreateOutcomeParams{
+		TenantID: tenant1, Code: "MA1.1", Description: "d", Subject: "math",
+	})
+	require.NoError(t, err)
+
+	// tenant2 sees no outcomes.
+	list, err := st.ListOutcomes(ctx, tenant2)
+	require.NoError(t, err)
+	require.Empty(t, list)
+
+	// And GetOutcome from tenant2 for tenant1's outcome → ErrNotFound.
+	tenant1List, err := st.ListOutcomes(ctx, tenant1)
+	require.NoError(t, err)
+	require.Len(t, tenant1List, 1)
+
+	_, err = st.GetOutcome(ctx, tenant2, tenant1List[0].ID)
+	require.ErrorIs(t, err, ErrNotFound)
+}

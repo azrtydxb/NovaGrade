@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ClearTenantDefaultAIProvider(ctx context.Context, tenantID uuid.UUID) error
 	CreateSubmission(ctx context.Context, arg CreateSubmissionParams) (Submission, error)
 	CreateWebhookSubscription(ctx context.Context, arg CreateWebhookSubscriptionParams) (WebhookSubscription, error)
 	DeleteIntegrationConnection(ctx context.Context, arg DeleteIntegrationConnectionParams) (int64, error)
@@ -19,6 +20,8 @@ type Querier interface {
 	GetActiveWebhooksForEvent(ctx context.Context, arg GetActiveWebhooksForEventParams) ([]WebhookSubscription, error)
 	GetAppeal(ctx context.Context, arg GetAppealParams) (Appeal, error)
 	GetAssessmentVersionTenantID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetCurriculumOutcome(ctx context.Context, arg GetCurriculumOutcomeParams) (CurriculumOutcome, error)
+	GetDefaultAIProviderConfigWithKey(ctx context.Context, tenantID uuid.UUID) (AiProviderConfig, error)
 	GetFinalGrade(ctx context.Context, arg GetFinalGradeParams) (GetFinalGradeRow, error)
 	GetIntegrationConnectionWithCreds(ctx context.Context, arg GetIntegrationConnectionWithCredsParams) (IntegrationConnection, error)
 	// Returns the highest-version marking_guide row for the given tenant + assessment_version.
@@ -26,8 +29,10 @@ type Querier interface {
 	GetModerationSession(ctx context.Context, arg GetModerationSessionParams) (ModerationSession, error)
 	GetStudent(ctx context.Context, arg GetStudentParams) (Student, error)
 	GetSubmission(ctx context.Context, id uuid.UUID) (Submission, error)
+	InsertAIProviderConfig(ctx context.Context, arg InsertAIProviderConfigParams) (AiProviderConfig, error)
 	InsertAppeal(ctx context.Context, arg InsertAppealParams) (Appeal, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
+	InsertCurriculumOutcome(ctx context.Context, arg InsertCurriculumOutcomeParams) (CurriculumOutcome, error)
 	InsertFinalGrade(ctx context.Context, arg InsertFinalGradeParams) (InsertFinalGradeRow, error)
 	// Inserts a new marking_guide version. The version number is computed atomically
 	// as COALESCE(MAX(version), 0) + 1 within the (tenant_id, assessment_version_id)
@@ -36,17 +41,21 @@ type Querier interface {
 	InsertModerationMark(ctx context.Context, arg InsertModerationMarkParams) (ModerationMark, error)
 	InsertModerationSession(ctx context.Context, arg InsertModerationSessionParams) (ModerationSession, error)
 	InsertModerationSessionSubmission(ctx context.Context, arg InsertModerationSessionSubmissionParams) error
+	InsertQuestionOutcome(ctx context.Context, arg InsertQuestionOutcomeParams) (QuestionOutcome, error)
 	InsertTeacherReview(ctx context.Context, arg InsertTeacherReviewParams) (InsertTeacherReviewRow, error)
+	ListAIProviderConfigs(ctx context.Context, tenantID uuid.UUID) ([]ListAIProviderConfigsRow, error)
 	ListAppeals(ctx context.Context, arg ListAppealsParams) ([]Appeal, error)
 	// Returns all audit_event rows for a specific submission (entity_id) scoped
 	// to the given tenant, ordered chronologically (oldest first).
 	// Only rows with entity_type = 'submission' are returned.
 	ListAuditEventsBySubmission(ctx context.Context, arg ListAuditEventsBySubmissionParams) ([]AuditEvent, error)
+	ListCurriculumOutcomes(ctx context.Context, tenantID uuid.UUID) ([]CurriculumOutcome, error)
 	// Returns all marking_guide versions for a tenant + assessment_version, newest first.
 	ListGuideVersions(ctx context.Context, arg ListGuideVersionsParams) ([]ListGuideVersionsRow, error)
 	ListIntegrationConnections(ctx context.Context, tenantID uuid.UUID) ([]ListIntegrationConnectionsRow, error)
 	ListModerationMarks(ctx context.Context, arg ListModerationMarksParams) ([]ModerationMark, error)
 	ListModerationSessionSubmissions(ctx context.Context, arg ListModerationSessionSubmissionsParams) ([]uuid.UUID, error)
+	ListQuestionOutcomes(ctx context.Context, arg ListQuestionOutcomesParams) ([]QuestionOutcome, error)
 	ListSubmissionsByAssessmentVersion(ctx context.Context, arg ListSubmissionsByAssessmentVersionParams) ([]Submission, error)
 	// When $2 is the empty string, no state filter is applied (all states match).
 	ListSubmissionsByState(ctx context.Context, arg ListSubmissionsByStateParams) ([]Submission, error)
@@ -58,6 +67,7 @@ type Querier interface {
 	// Ordered by id (uuid primary key) for reproducibility — tests can pre-create
 	// submissions and predict which are sampled. NOT random, enabling deterministic tests.
 	SampleSubmissionsByAssessmentVersion(ctx context.Context, arg SampleSubmissionsByAssessmentVersionParams) ([]uuid.UUID, error)
+	SetAIProviderDefault(ctx context.Context, arg SetAIProviderDefaultParams) (int64, error)
 	SetSourcePDFKey(ctx context.Context, arg SetSourcePDFKeyParams) (int64, error)
 	SetSubmissionState(ctx context.Context, arg SetSubmissionStateParams) (int64, error)
 	UpdateAppealStatus(ctx context.Context, arg UpdateAppealStatusParams) (int64, error)

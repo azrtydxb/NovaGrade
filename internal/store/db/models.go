@@ -27,6 +27,18 @@ type AiGradingResult struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type AiProviderConfig struct {
+	ID           uuid.UUID
+	TenantID     uuid.UUID
+	Name         string
+	ProviderType string
+	BaseUrl      string
+	Model        string
+	ApiKeyEnc    []byte
+	IsDefault    bool
+	CreatedAt    pgtype.Timestamptz
+}
+
 type ApiKey struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID
@@ -94,6 +106,15 @@ type Course struct {
 	Code         string
 	Name         string
 	CreatedAt    pgtype.Timestamptz
+}
+
+type CurriculumOutcome struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	Code        string
+	Description string
+	Subject     string
+	CreatedAt   pgtype.Timestamptz
 }
 
 type Department struct {
@@ -203,6 +224,15 @@ type Question struct {
 	Sequence            int32
 	Stem                string
 	MaxMarks            pgtype.Numeric
+	CreatedAt           pgtype.Timestamptz
+}
+
+type QuestionOutcome struct {
+	ID                  uuid.UUID
+	TenantID            uuid.UUID
+	AssessmentVersionID uuid.UUID
+	QuestionNo          string
+	OutcomeID           uuid.UUID
 	CreatedAt           pgtype.Timestamptz
 }
 

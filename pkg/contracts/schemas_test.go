@@ -94,3 +94,76 @@ func TestGradedPaperRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// TestGradedQuestionRevisionRoundTrip verifies that the Revision field is
+// correctly serialised (present when non-empty, absent when empty) and that
+// awarded_marks / max_marks are unchanged after a marshal/unmarshal cycle.
+func TestGradedQuestionRevisionRoundTrip(t *testing.T) {
+	withRevision := GradedQuestion{
+		QuestionNo:   "3",
+		MaxMarks:     5.0,
+		AwardedMarks: 2.0,
+		StudentAnswer: "partial answer",
+		Justification: "Missing key steps",
+		GradeConfidence: 0.8,
+		Flags:        []string{},
+		Feedback:     "Good start but incomplete.",
+		Revision:     "To improve, show all working and state each theorem used.",
+	}
+	withoutRevision := GradedQuestion{
+		QuestionNo:   "4",
+		MaxMarks:     3.0,
+		AwardedMarks: 3.0,
+		StudentAnswer: "full answer",
+		Justification: "Fully correct",
+		GradeConfidence: 1.0,
+		Flags:        []string{},
+		Feedback:     "Excellent.",
+		Revision:     "", // omitempty — must not appear in JSON
+	}
+
+	// Round-trip withRevision.
+	dataWith, err := json.Marshal(withRevision)
+	if err != nil {
+		t.Fatalf("marshal withRevision: %v", err)
+	}
+	var rtWith GradedQuestion
+	if err := json.Unmarshal(dataWith, &rtWith); err != nil {
+		t.Fatalf("unmarshal withRevision: %v", err)
+	}
+	if rtWith.Revision != withRevision.Revision {
+		t.Errorf("Revision round-trip: got %q, want %q", rtWith.Revision, withRevision.Revision)
+	}
+	// Marks must not be affected.
+	if rtWith.AwardedMarks != withRevision.AwardedMarks {
+		t.Errorf("awarded_marks changed: got %v, want %v", rtWith.AwardedMarks, withRevision.AwardedMarks)
+	}
+	if rtWith.MaxMarks != withRevision.MaxMarks {
+		t.Errorf("max_marks changed: got %v, want %v", rtWith.MaxMarks, withRevision.MaxMarks)
+	}
+
+	// Empty Revision must be absent from JSON (omitempty).
+	dataWithout, err := json.Marshal(withoutRevision)
+	if err != nil {
+		t.Fatalf("marshal withoutRevision: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(dataWithout, &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+	if _, present := raw["revision"]; present {
+		t.Errorf("revision key present in JSON for empty Revision (omitempty violated)")
+	}
+
+	// Round-trip without-Revision preserves marks.
+	var rtWithout GradedQuestion
+	if err := json.Unmarshal(dataWithout, &rtWithout); err != nil {
+		t.Fatalf("unmarshal withoutRevision: %v", err)
+	}
+	if rtWithout.AwardedMarks != withoutRevision.AwardedMarks {
+		t.Errorf("awarded_marks changed: got %v, want %v", rtWithout.AwardedMarks, withoutRevision.AwardedMarks)
+	}
+	if rtWithout.MaxMarks != withoutRevision.MaxMarks {
+		t.Errorf("max_marks changed: got %v, want %v", rtWithout.MaxMarks, withoutRevision.MaxMarks)
+	}
+}

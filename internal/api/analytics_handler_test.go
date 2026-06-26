@@ -49,6 +49,17 @@ func (f *AnalyticsFakeStore) ListAuditEventsBySubmission(_ context.Context, _, s
 	return f.auditEvents[submissionID], nil
 }
 
+// ListQuestionOutcomes satisfies the AnalyticsStore interface; stub returns nil.
+// Tests that need outcome data use OutcomeMasteryFakeStore which overrides this.
+func (f *AnalyticsFakeStore) ListQuestionOutcomes(_ context.Context, _, _ uuid.UUID) ([]store.QuestionOutcome, error) {
+	return nil, nil
+}
+
+// ListOutcomes satisfies the AnalyticsStore interface; stub returns nil.
+func (f *AnalyticsFakeStore) ListOutcomes(_ context.Context, _ uuid.UUID) ([]store.CurriculumOutcome, error) {
+	return nil, nil
+}
+
 // seedAuditOverride adds an override_question audit event for a submission.
 func (f *AnalyticsFakeStore) seedAuditOverride(submissionID uuid.UUID, qno string, oldMarks, newMarks float64) {
 	f.mu.Lock()
@@ -338,3 +349,283 @@ func TestGetOverrideStats_CrossTenant(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, rec.Code, "cross-tenant must return 404, body: %s", rec.Body.String())
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OutcomeMasteryFakeStore — extends AnalyticsFakeStore with ListOutcomes +
+// ListQuestionOutcomes for the outcome-mastery endpoint tests.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type OutcomeMasteryFakeStore struct {
+	*AnalyticsFakeStore
+	omMu             sync.Mutex
+	omOutcomes       map[uuid.UUID]store.CurriculumOutcome
+	omQuestionOutcomes []store.QuestionOutcome
+}
+
+func newOutcomeMasteryFakeStore() *OutcomeMasteryFakeStore {
+	return &OutcomeMasteryFakeStore{
+		AnalyticsFakeStore: newAnalyticsFakeStore(),
+		omOutcomes:         make(map[uuid.UUID]store.CurriculumOutcome),
+	}
+}
+
+func (f *OutcomeMasteryFakeStore) ListOutcomes(_ context.Context, tenantID uuid.UUID) ([]store.CurriculumOutcome, error) {
+	f.omMu.Lock()
+	defer f.omMu.Unlock()
+	result := make([]store.CurriculumOutcome, 0)
+	for _, o := range f.omOutcomes {
+		if o.TenantID == tenantID {
+			result = append(result, o)
+		}
+	}
+	return result, nil
+}
+
+func (f *OutcomeMasteryFakeStore) ListQuestionOutcomes(_ context.Context, tenantID, avid uuid.UUID) ([]store.QuestionOutcome, error) {
+	f.omMu.Lock()
+	defer f.omMu.Unlock()
+	result := make([]store.QuestionOutcome, 0)
+	for _, q := range f.omQuestionOutcomes {
+		if q.TenantID == tenantID && q.AssessmentVersionID == avid {
+			result = append(result, q)
+		}
+	}
+	return result, nil
+}
+
+// seedOutcomeOM inserts a curriculum outcome directly.
+func (f *OutcomeMasteryFakeStore) seedOutcomeOM(tenantID uuid.UUID, code, description string) store.CurriculumOutcome {
+	f.omMu.Lock()
+	defer f.omMu.Unlock()
+	o := store.CurriculumOutcome{
+		ID:          uuid.New(),
+		TenantID:    tenantID,
+		Code:        code,
+		Description: description,
+		Subject:     "math",
+		CreatedAt:   time.Now(),
+	}
+	f.omOutcomes[o.ID] = o
+	return o
+}
+
+// seedQuestionOutcomeOM maps a question_no to an outcome for the given avid.
+func (f *OutcomeMasteryFakeStore) seedQuestionOutcomeOM(tenantID, avid uuid.UUID, questionNo string, outcomeID uuid.UUID) {
+	f.omMu.Lock()
+	defer f.omMu.Unlock()
+	f.omQuestionOutcomes = append(f.omQuestionOutcomes, store.QuestionOutcome{
+		ID:                  uuid.New(),
+		TenantID:            tenantID,
+		AssessmentVersionID: avid,
+		QuestionNo:          questionNo,
+		OutcomeID:           outcomeID,
+		CreatedAt:           time.Now(),
+	})
+}
+
+// buildOutcomeMasteryRouter builds a router with all analytics endpoints
+// including the new outcome-mastery route.
+func buildOutcomeMasteryRouter(t *testing.T, h *api.AnalyticsHandlers, resolver *auth.APIKeyResolver) http.Handler {
+	t.Helper()
+	r := chi.NewRouter()
+	r.Use(auth.Middleware(resolver))
+	r.Get("/v1/assessment-versions/{avid}/analytics", h.GetAnalytics)
+	r.Get("/v1/assessment-versions/{avid}/override-stats", h.GetOverrideStats)
+	r.Get("/v1/assessment-versions/{avid}/outcome-mastery", h.GetOutcomeMastery)
+	return r
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Outcome-mastery endpoint tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestGetOutcomeMastery_OK: graded papers + mapped outcomes → correct JSON.
+func TestGetOutcomeMastery_OK(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	avid := uuid.New()
+	fakeStore := newOutcomeMasteryFakeStore()
+	fakeObjects := NewFakeObjectStore()
+
+	// Seed 3 graded submissions.
+	fakeStore.seedGradedSubmission(t, fakeObjects, tenantID, avid, "Alice")
+	fakeStore.seedGradedSubmission(t, fakeObjects, tenantID, avid, "Bob")
+	fakeStore.seedGradedSubmission(t, fakeObjects, tenantID, avid, "Carol")
+
+	// Seed curriculum outcomes.
+	alpha := fakeStore.seedOutcomeOM(tenantID, "ALPHA", "Alpha outcome")
+	beta := fakeStore.seedOutcomeOM(tenantID, "BETA", "Beta outcome")
+
+	// Map questions to outcomes.
+	// makeGradedPaperWithFlags uses question_no "1" and "2".
+	// "1" → ALPHA; "2" → ALPHA + BETA
+	fakeStore.seedQuestionOutcomeOM(tenantID, avid, "1", alpha.ID)
+	fakeStore.seedQuestionOutcomeOM(tenantID, avid, "2", alpha.ID)
+	fakeStore.seedQuestionOutcomeOM(tenantID, avid, "2", beta.ID)
+
+	h := &api.AnalyticsHandlers{Store: fakeStore, Objects: fakeObjects, DeployMode: "onprem"}
+
+	principal := auth.Principal{
+		ID:       "teacher-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/assessment-versions/"+avid.String()+"/outcome-mastery", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildOutcomeMasteryRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+
+	var resp struct {
+		Outcomes    []map[string]interface{} `json:"outcomes"`
+		Gaps        []map[string]interface{} `json:"gaps"`
+		GradedCount int                      `json:"graded_count"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+
+	assert.Equal(t, 3, resp.GradedCount, "three graded submissions")
+	require.Len(t, resp.Outcomes, 2, "two outcomes")
+
+	// Outcomes are sorted by Code: ALPHA first, then BETA.
+	alphaResp := resp.Outcomes[0]
+	betaResp := resp.Outcomes[1]
+	assert.Equal(t, "ALPHA", alphaResp["code"])
+	assert.Equal(t, "BETA", betaResp["code"])
+
+	// Verify exact MeanPct for ALPHA.
+	// makeGradedPaperWithFlags produces: Q1=(7/10), Q2=(3/5)
+	// ALPHA maps to Q1 and Q2:
+	// - 3 submissions × 7/10 (Q1) = 21/30
+	// - 3 submissions × 3/5 (Q2) = 9/15
+	// - ALPHA MeanPct = (21 + 9) / (30 + 15) = 30/45 ≈ 0.6666...
+	alphaMeanPct, ok := alphaResp["mean_pct"].(float64)
+	require.True(t, ok, "mean_pct must be float64")
+	expectedAlphaMeanPct := 30.0 / 45.0 // 0.6666...
+	assert.InDelta(t, expectedAlphaMeanPct, alphaMeanPct, 1e-9, "ALPHA mean_pct must be exactly 30/45")
+
+	// Verify exact mastery bucket: 30/45 ≈ 0.667 is in [0.5, 0.75) → "developing".
+	assert.Equal(t, "developing", alphaResp["mastery"], "ALPHA 30/45 → developing")
+
+	// Verify exact MeanPct for BETA.
+	// makeGradedPaperWithFlags produces: Q2=(3/5)
+	// BETA maps only to Q2:
+	// - 3 submissions × 3/5 (Q2) = 9/15
+	// - BETA MeanPct = 9/15 = 0.6
+	betaMeanPct, ok := betaResp["mean_pct"].(float64)
+	require.True(t, ok, "BETA mean_pct must be float64")
+	expectedBetaMeanPct := 9.0 / 15.0 // 0.6
+	assert.InDelta(t, expectedBetaMeanPct, betaMeanPct, 1e-9, "BETA mean_pct must be exactly 9/15")
+	// BETA 9/15 = 0.6 is in [0.5, 0.75) → "developing".
+	assert.Equal(t, "developing", betaResp["mastery"], "BETA 9/15 → developing")
+
+	// Gaps: sorted by MeanPct ascending (weakest first). BETA < ALPHA.
+	require.NotEmpty(t, resp.Gaps, "gaps must not be empty")
+	assert.Equal(t, "BETA", resp.Gaps[0]["code"], "weakest outcome is BETA")
+}
+
+// TestGetOutcomeMastery_UngradedSkipped: ungraded submissions must be skipped.
+func TestGetOutcomeMastery_UngradedSkipped(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	avid := uuid.New()
+	fakeStore := newOutcomeMasteryFakeStore()
+	fakeObjects := NewFakeObjectStore()
+
+	fakeStore.seedGradedSubmission(t, fakeObjects, tenantID, avid, "Alice")
+	fakeStore.seedUngradedSubmission(tenantID, avid) // must be skipped
+
+	alpha := fakeStore.seedOutcomeOM(tenantID, "ALPHA", "Alpha outcome")
+	fakeStore.seedQuestionOutcomeOM(tenantID, avid, "1", alpha.ID) // "1" matches makeGradedPaperWithFlags
+
+	h := &api.AnalyticsHandlers{Store: fakeStore, Objects: fakeObjects, DeployMode: "onprem"}
+
+	principal := auth.Principal{
+		ID:       "teacher-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/assessment-versions/"+avid.String()+"/outcome-mastery", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildOutcomeMasteryRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp struct {
+		GradedCount int `json:"graded_count"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.GradedCount, "only 1 graded; ungraded skipped")
+}
+
+// TestGetOutcomeMastery_CrossTenant: teacher from tenantB → 404.
+func TestGetOutcomeMastery_CrossTenant(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+	avid := uuid.New()
+	fakeStore := newOutcomeMasteryFakeStore()
+	fakeObjects := NewFakeObjectStore()
+
+	fakeStore.seedGradedSubmission(t, fakeObjects, tenantA, avid, "Alice")
+
+	h := &api.AnalyticsHandlers{Store: fakeStore, Objects: fakeObjects, DeployMode: "onprem"}
+
+	principal := auth.Principal{
+		ID:       "teacher-b",
+		TenantID: tenantB.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/assessment-versions/"+avid.String()+"/outcome-mastery", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildOutcomeMasteryRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code, "cross-tenant must return 404")
+}
+
+// TestGetOutcomeMastery_ScannerForbidden: scanner role → 404.
+func TestGetOutcomeMastery_ScannerForbidden(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	avid := uuid.New()
+	fakeStore := newOutcomeMasteryFakeStore()
+	fakeObjects := NewFakeObjectStore()
+
+	h := &api.AnalyticsHandlers{Store: fakeStore, Objects: fakeObjects, DeployMode: "onprem"}
+
+	resolver := auth.NewAPIKeyResolver()
+	scanner := auth.Principal{
+		ID:       "scanner-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleScanner},
+	}
+	resolver.Register("scanner-key", scanner)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/assessment-versions/"+avid.String()+"/outcome-mastery", nil)
+	req.Header.Set("X-API-Key", "scanner-key")
+	rec := httptest.NewRecorder()
+
+	router := buildOutcomeMasteryRouter(t, h, resolver)
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code, "scanner must not access outcome-mastery")
+}

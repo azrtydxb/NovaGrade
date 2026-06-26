@@ -24,6 +24,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -42,9 +43,11 @@ import (
 	integrationcsv "github.com/azrtydxb/novagrade/internal/integration/csv"
 	"github.com/azrtydxb/novagrade/internal/integration/oneroster"
 	"github.com/azrtydxb/novagrade/internal/integration/webhook"
+	"github.com/azrtydxb/novagrade/internal/providers"
 	"github.com/azrtydxb/novagrade/internal/queue"
 	"github.com/azrtydxb/novagrade/internal/secrets"
 	"github.com/azrtydxb/novagrade/internal/store"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -202,6 +205,42 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	cuh := &api.CurriculumHandlers{
+		Store:      st,
+		DeployMode: deployMode,
+	}
+
+	// ── AI provider registry (per-tenant config + env fallback) ────────────────
+	// The fallback provider is built from the env-configured vLLM endpoint
+	// (VLLM_BASE_URL / VLLM_API_KEY / VLLM_MODEL), matching the dedicated workers.
+	fallbackBaseURL := getenv("VLLM_BASE_URL", "http://localhost:8000")
+	fallbackModel := getenv("VLLM_MODEL", "default")
+	fallbackProvider := providers.NewVLLMProvider(providers.VLLMConfig{
+		BaseURL: fallbackBaseURL,
+		APIKey:  os.Getenv("VLLM_API_KEY"),
+		LogSink: func(l providers.AICallLog) {
+			log.Printf("ai-call model=%s prompt_version=%s tokens=%d cost=%.6f schema_valid=%v",
+				l.Model, l.PromptVersion, l.Tokens.Total, l.CostUSD, l.SchemaValid)
+		},
+	})
+	aiRegistry := &providers.Registry{
+		Source:        &storeConfigSource{store: st},
+		Fallback:      fallbackProvider,
+		FallbackModel: fallbackModel,
+	}
+
+	fbh := &api.FeedbackHandlers{
+		Store:      st,
+		Objects:    objAdapter,
+		Registry:   aiRegistry,
+		DeployMode: deployMode,
+	}
+
+	aih := &api.AIProviderHandlers{
+		Store:      st,
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -242,6 +281,7 @@ func main() {
 		// Analytics
 		r.Get("/assessment-versions/{avid}/analytics", anah.GetAnalytics)
 		r.Get("/assessment-versions/{avid}/override-stats", anah.GetOverrideStats)
+		r.Get("/assessment-versions/{avid}/outcome-mastery", anah.GetOutcomeMastery)
 		// Moderation (second-marker sampled workflow)
 		r.Post("/assessment-versions/{avid}/moderation", moh.StartSession)
 		r.Post("/moderation/{id}/marks", moh.RecordMark)
@@ -251,6 +291,17 @@ func main() {
 		r.Get("/appeals", aph.ListAppeals)
 		r.Post("/appeals/{id}/resolve", aph.ResolveAppeal)
 		r.Post("/appeals/{id}/regrade", aph.RegradeAppeal)
+		// Curriculum outcomes + question→outcome mapping
+		r.Post("/outcomes", cuh.CreateOutcome)
+		r.Get("/outcomes", cuh.ListOutcomes)
+		r.Post("/assessment-versions/{avid}/question-outcomes", cuh.MapQuestionOutcome)
+		r.Get("/assessment-versions/{avid}/question-outcomes", cuh.ListQuestionOutcomes)
+		// Per-tenant AI provider config (api keys encrypted at rest)
+		r.Post("/ai-providers", aih.CreateAIProvider)
+		r.Get("/ai-providers", aih.ListAIProviders)
+		r.Post("/ai-providers/{id}/default", aih.SetDefaultAIProvider)
+		// Feedback regeneration (pre-approval only; per-tenant provider)
+		r.Post("/submissions/{id}/feedback/regenerate", fbh.Regenerate)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
@@ -286,6 +337,52 @@ func registerScannerKeys(resolver *auth.APIKeyResolver, raw string) {
 		})
 		log.Printf("api: registered scanner API key for tenant %s principal %s", tenantID, principalID)
 	}
+}
+
+// storeConfigSource adapts *store.Store to providers.ConfigSource. It fetches
+// the tenant's default AI provider config (with encrypted key bytes) and
+// decrypts the api_key with INTEGRATION_ENC_KEY before handing a fully-decrypted
+// ProviderConfig to the registry. The registry never sees encrypted bytes.
+type storeConfigSource struct {
+	store *store.Store
+}
+
+func (s *storeConfigSource) DefaultConfig(ctx context.Context, tenantID uuid.UUID) (providers.ProviderConfig, error) {
+	if s.store == nil {
+		return providers.ProviderConfig{}, fmt.Errorf("storeConfigSource: nil store")
+	}
+	cfg, encKey, err := s.store.GetDefaultAIProviderConfigWithKey(ctx, tenantID)
+	if err != nil {
+		// If the tenant has no default provider config, return ErrNotFound as-is
+		// so the Registry treats it as a silent fallback. For any other error
+		// (e.g., secrets.Decrypt failure), log it before returning so real
+		// decryption/config issues are observable.
+		if errors.Is(err, store.ErrNotFound) {
+			return providers.ProviderConfig{}, err
+		}
+		log.Printf("ai-registry: tenant %s provider config error (using fallback): %v", tenantID, err)
+		return providers.ProviderConfig{}, err
+	}
+	apiKey := ""
+	if len(encKey) > 0 {
+		key, err := secrets.KeyFromEnv("INTEGRATION_ENC_KEY")
+		if err != nil {
+			log.Printf("ai-registry: tenant %s provider config error (using fallback): %v", tenantID, err)
+			return providers.ProviderConfig{}, err
+		}
+		plain, err := secrets.Decrypt(key, encKey)
+		if err != nil {
+			log.Printf("ai-registry: tenant %s provider config error (using fallback): %v", tenantID, err)
+			return providers.ProviderConfig{}, err
+		}
+		apiKey = string(plain)
+	}
+	return providers.ProviderConfig{
+		ProviderType: cfg.ProviderType,
+		BaseURL:      cfg.BaseURL,
+		Model:        cfg.Model,
+		APIKey:       apiKey,
+	}, nil
 }
 
 // getenv returns the environment variable named by key, or fallback if not set.
