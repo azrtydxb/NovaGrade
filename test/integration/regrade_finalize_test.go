@@ -66,7 +66,9 @@ func newStatefulFakeAIServer(t *testing.T) (*httptest.Server, *int64) {
 	t.Helper()
 
 	var gradeCallCount int64
-	const passThreshold int64 = 2 // 2 questions per submission pass
+	// 2 questions × 2 page renders = 4 grade-model calls per first pass;
+	// calls > 4 come from the regrade pass and return higher marks.
+	const passThreshold int64 = 4
 
 	responses := map[string]func() string{
 		"dots.ocr": func() string {
@@ -189,6 +191,9 @@ func newRegradeAPIServer(t *testing.T, inf *testInfra) string {
 // TestRegradeFinalizes proves the complete regrade→re-approve finalization loop
 // end-to-end on real infrastructure.
 func TestRegradeFinalizes(t *testing.T) {
+	if os.Getenv("SKIP_DOCKER_TESTS") != "" {
+		t.Skip("SKIP_DOCKER_TESTS set")
+	}
 	inf := startInfra(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -313,6 +318,13 @@ func TestRegradeFinalizes(t *testing.T) {
 	require.Equal(t, contracts.StateApproved, pollSubmission(ctx, t, inf.pgStore, subID,
 		[]contracts.SubmissionState{contracts.StateApproved, contracts.StateFailed}, 90*time.Second),
 		"submission %s must reach approved after re-approve", subID)
+
+	// Resolve the appeal now that the regrade has been approved.
+	resolveResp := postJSON(t, apiURL, adminJWT, fmt.Sprintf("/v1/appeals/%s/resolve", appeal.ID),
+		map[string]any{"status": "resolved", "resolution": "regrade completed and approved"})
+	require.Equal(t, http.StatusOK, resolveResp.status,
+		"POST /appeals/%s/resolve expected 200, got %d: %s", appeal.ID, resolveResp.status, resolveResp.body)
+	t.Logf("regrade_finalize: appeal %s resolved", appeal.ID)
 
 	// ── Step 5: Assertions ────────────────────────────────────────────────────────
 
