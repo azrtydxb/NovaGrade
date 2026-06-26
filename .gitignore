@@ -9,3 +9,6 @@ venv/
 /bin/
 *.env
 .env
+
+# SDD scratch (briefs, reports, ledger, review packages)
+.superpowers/
