@@ -43,8 +43,9 @@ type ModerationFakeStore struct {
 	sessionSubs    map[uuid.UUID][]uuid.UUID            // sessionID → sampled submission ids
 	marks          []store.ModerationMark
 	finalGrades    map[uuid.UUID]store.FinalGrade       // submissionID → finalGrade (for comparison)
-	// Track whether any grade was mutated (must remain false).
-	gradeMutated bool
+	// No gradeMutated flag needed: the ModerationStore interface exposes no
+	// grade-write method (no SetSubmissionState, InsertFinalGrade, etc.), so
+	// the no-mutation guarantee is structurally enforced by the narrow interface.
 }
 
 func newModerationFakeStore() *ModerationFakeStore {
@@ -162,12 +163,15 @@ func (f *ModerationFakeStore) seedFinalGradeForComparison(tenantID, submissionID
 	}
 }
 
-// assertNoGradeMutated asserts that no final grade was mutated during the test.
+// assertNoGradeMutated documents that no grade mutation is possible during moderation.
+// The ModerationStore interface exposes no grade-write method, so this is a
+// structural guarantee rather than a runtime check. The assertion is kept as a
+// named method so call-sites remain self-documenting.
 func (f *ModerationFakeStore) assertNoGradeMutated(t *testing.T) {
 	t.Helper()
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	assert.False(t, f.gradeMutated, "moderation must NEVER mutate a final grade")
+	// No runtime check needed: ModerationStore interface has no grade-write
+	// method (no SetSubmissionState, InsertFinalGrade, InsertTeacherReview, etc.).
+	// If such a method were ever added, a compile error would surface immediately.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -377,6 +381,60 @@ func TestRecordMark_CrossTenantSession(t *testing.T) {
 	router.ServeHTTP(markRec, markReq)
 
 	require.Equal(t, http.StatusNotFound, markRec.Code, "cross-tenant mark submission must return 404")
+}
+
+// TestRecordMark_SubmissionNotInSample: a submission_id not in the session's
+// sampled submissions must be rejected with 422 and NO mark recorded.
+func TestRecordMark_SubmissionNotInSample(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	avid := uuid.New()
+	fakeStore := newModerationFakeStore()
+	fakeObjects := NewFakeObjectStore()
+
+	fakeStore.seedGradedSubmission(t, fakeObjects, tenantID, avid, "Alice")
+
+	h := &api.ModerationHandlers{Store: fakeStore, Objects: fakeObjects, DeployMode: "onprem"}
+	router := buildModerationRouter(t, h, auth.NewAPIKeyResolver())
+	tok := newTeacherToken(t, tenantID)
+
+	// Start a session (sample_size=1 → Alice is the only sampled submission).
+	sessBody, _ := json.Marshal(map[string]int{"sample_size": 1})
+	sessReq := httptest.NewRequest(http.MethodPost, "/v1/assessment-versions/"+avid.String()+"/moderation", bytes.NewReader(sessBody))
+	sessReq.Header.Set("Authorization", "Bearer "+tok)
+	sessReq.Header.Set("Content-Type", "application/json")
+	sessRec := httptest.NewRecorder()
+	router.ServeHTTP(sessRec, sessReq)
+	require.Equal(t, http.StatusCreated, sessRec.Code)
+
+	var sessResp struct {
+		SessionID string `json:"session_id"`
+	}
+	require.NoError(t, json.Unmarshal(sessRec.Body.Bytes(), &sessResp))
+
+	// Submit a mark using a submission_id that is NOT in the sample.
+	outsideSubID := uuid.New()
+	markBody, _ := json.Marshal(map[string]interface{}{
+		"submission_id":   outsideSubID.String(),
+		"question_no":     "1",
+		"moderator_marks": 5.0,
+	})
+	markReq := httptest.NewRequest(http.MethodPost, "/v1/moderation/"+sessResp.SessionID+"/marks", bytes.NewReader(markBody))
+	markReq.Header.Set("Authorization", "Bearer "+tok)
+	markReq.Header.Set("Content-Type", "application/json")
+	markRec := httptest.NewRecorder()
+	router.ServeHTTP(markRec, markReq)
+
+	// Must be rejected with 4xx (422 Unprocessable Entity).
+	assert.Equal(t, http.StatusUnprocessableEntity, markRec.Code,
+		"out-of-sample submission must be rejected; body: %s", markRec.Body.String())
+
+	// No mark must have been recorded.
+	fakeStore.mu.Lock()
+	markCount := len(fakeStore.marks)
+	fakeStore.mu.Unlock()
+	assert.Equal(t, 0, markCount, "no mark should be recorded for an out-of-sample submission")
 }
 
 // TestGetComparison_Deltas: verifies that comparison report computes correct

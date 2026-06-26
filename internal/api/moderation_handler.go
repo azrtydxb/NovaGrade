@@ -248,6 +248,29 @@ func (h *ModerationHandlers) RecordMark(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "question_no is required", http.StatusBadRequest)
 		return
 	}
+	// Fix 4: reject negative moderator_marks.
+	if req.ModeratorMarks < 0 {
+		http.Error(w, "moderator_marks must be non-negative", http.StatusBadRequest)
+		return
+	}
+
+	// Fix 1: validate that submission_id is in the session's sampled submissions.
+	sampledIDs, err := h.Store.ListModerationSubmissions(r.Context(), tenantID, sessionID)
+	if err != nil {
+		http.Error(w, "store error", http.StatusInternalServerError)
+		return
+	}
+	inSample := false
+	for _, id := range sampledIDs {
+		if id == submissionID {
+			inSample = true
+			break
+		}
+	}
+	if !inSample {
+		http.Error(w, "submission_id is not in the session's sampled submissions", http.StatusUnprocessableEntity)
+		return
+	}
 
 	// The moderator is the authenticated principal.
 	mark, err := h.Store.RecordModerationMark(r.Context(), store.RecordModerationMarkParams{
@@ -337,6 +360,12 @@ func (h *ModerationHandlers) GetComparison(w http.ResponseWriter, r *http.Reques
 		sub, err := h.Store.GetSubmission(r.Context(), subID)
 		if err != nil {
 			return c // empty — marks will show 0
+		}
+		// Fix 2: belt-and-suspenders tenant assertion. GetSubmission fetches by ID
+		// only; if somehow a foreign-tenant submission ID leaked through, skip it
+		// rather than building an object key from a different tenant's path.
+		if sub.TenantID != tenantID {
+			return c // skip foreign-tenant submission silently
 		}
 
 		// AI mark: always from graded.v1.json (raw, before any overrides).
