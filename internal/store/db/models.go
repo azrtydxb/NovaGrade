@@ -27,6 +27,18 @@ type AiGradingResult struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type AiProviderConfig struct {
+	ID           uuid.UUID
+	TenantID     uuid.UUID
+	Name         string
+	ProviderType string
+	BaseUrl      string
+	Model        string
+	ApiKeyEnc    []byte
+	IsDefault    bool
+	CreatedAt    pgtype.Timestamptz
+}
+
 type ApiKey struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID

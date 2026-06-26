@@ -42,9 +42,11 @@ import (
 	integrationcsv "github.com/azrtydxb/novagrade/internal/integration/csv"
 	"github.com/azrtydxb/novagrade/internal/integration/oneroster"
 	"github.com/azrtydxb/novagrade/internal/integration/webhook"
+	"github.com/azrtydxb/novagrade/internal/providers"
 	"github.com/azrtydxb/novagrade/internal/queue"
 	"github.com/azrtydxb/novagrade/internal/secrets"
 	"github.com/azrtydxb/novagrade/internal/store"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -207,6 +209,31 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	// ── AI provider registry (per-tenant config + env fallback) ────────────────
+	// The fallback provider is built from the env-configured vLLM endpoint
+	// (VLLM_BASE_URL / VLLM_API_KEY / VLLM_MODEL), matching the dedicated workers.
+	fallbackBaseURL := getenv("VLLM_BASE_URL", "http://localhost:8000")
+	fallbackModel := getenv("VLLM_MODEL", "default")
+	fallbackProvider := providers.NewVLLMProvider(providers.VLLMConfig{
+		BaseURL: fallbackBaseURL,
+		APIKey:  os.Getenv("VLLM_API_KEY"),
+		LogSink: func(l providers.AICallLog) {
+			log.Printf("ai-call model=%s prompt_version=%s tokens=%d cost=%.6f schema_valid=%v",
+				l.Model, l.PromptVersion, l.Tokens.Total, l.CostUSD, l.SchemaValid)
+		},
+	})
+	aiRegistry := &providers.Registry{
+		Source:        &storeConfigSource{store: st},
+		Fallback:      fallbackProvider,
+		FallbackModel: fallbackModel,
+	}
+	_ = aiRegistry // resolved per-tenant by grade/feedback workers; wired here for the API surface.
+
+	aih := &api.AIProviderHandlers{
+		Store:      st,
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -262,6 +289,10 @@ func main() {
 		r.Get("/outcomes", cuh.ListOutcomes)
 		r.Post("/assessment-versions/{avid}/question-outcomes", cuh.MapQuestionOutcome)
 		r.Get("/assessment-versions/{avid}/question-outcomes", cuh.ListQuestionOutcomes)
+		// Per-tenant AI provider config (api keys encrypted at rest)
+		r.Post("/ai-providers", aih.CreateAIProvider)
+		r.Get("/ai-providers", aih.ListAIProviders)
+		r.Post("/ai-providers/{id}/default", aih.SetDefaultAIProvider)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
@@ -297,6 +328,42 @@ func registerScannerKeys(resolver *auth.APIKeyResolver, raw string) {
 		})
 		log.Printf("api: registered scanner API key for tenant %s principal %s", tenantID, principalID)
 	}
+}
+
+// storeConfigSource adapts *store.Store to providers.ConfigSource. It fetches
+// the tenant's default AI provider config (with encrypted key bytes) and
+// decrypts the api_key with INTEGRATION_ENC_KEY before handing a fully-decrypted
+// ProviderConfig to the registry. The registry never sees encrypted bytes.
+type storeConfigSource struct {
+	store *store.Store
+}
+
+func (s *storeConfigSource) DefaultConfig(ctx context.Context, tenantID uuid.UUID) (providers.ProviderConfig, error) {
+	if s.store == nil {
+		return providers.ProviderConfig{}, fmt.Errorf("storeConfigSource: nil store")
+	}
+	cfg, encKey, err := s.store.GetDefaultAIProviderConfigWithKey(ctx, tenantID)
+	if err != nil {
+		return providers.ProviderConfig{}, err
+	}
+	apiKey := ""
+	if len(encKey) > 0 {
+		key, err := secrets.KeyFromEnv("INTEGRATION_ENC_KEY")
+		if err != nil {
+			return providers.ProviderConfig{}, fmt.Errorf("storeConfigSource: enc key: %w", err)
+		}
+		plain, err := secrets.Decrypt(key, encKey)
+		if err != nil {
+			return providers.ProviderConfig{}, fmt.Errorf("storeConfigSource: decrypt: %w", err)
+		}
+		apiKey = string(plain)
+	}
+	return providers.ProviderConfig{
+		ProviderType: cfg.ProviderType,
+		BaseURL:      cfg.BaseURL,
+		Model:        cfg.Model,
+		APIKey:       apiKey,
+	}, nil
 }
 
 // getenv returns the environment variable named by key, or fallback if not set.
