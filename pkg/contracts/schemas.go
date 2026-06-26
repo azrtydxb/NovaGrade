@@ -29,6 +29,9 @@ type TranscribedPaper struct {
 // Feedback holds the AI-drafted per-question feedback text (added in Phase 2,
 // Task 5). It is separate from Justification (the grader's mark-scheme rationale)
 // and never affects awarded_marks or max_marks.
+// Revision holds the AI-drafted "how to improve" guidance for the student
+// (added in Phase 6, Task 4). Like Feedback, it is strictly additive and never
+// affects awarded_marks, max_marks, or any paper-level totals.
 type GradedQuestion struct {
 	QuestionNo      string   `json:"question_no"`
 	Section         *string  `json:"section"`
@@ -39,6 +42,7 @@ type GradedQuestion struct {
 	GradeConfidence float64  `json:"grade_confidence"`
 	Flags           []string `json:"flags"`
 	Feedback        string   `json:"feedback"`
+	Revision        string   `json:"revision,omitempty"`
 }
 
 // GradedPaper mirrors the POC's GradedPaper Pydantic model.

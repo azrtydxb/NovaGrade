@@ -227,7 +227,13 @@ func main() {
 		Fallback:      fallbackProvider,
 		FallbackModel: fallbackModel,
 	}
-	_ = aiRegistry // resolved per-tenant by grade/feedback workers; wired here for the API surface.
+
+	fbh := &api.FeedbackHandlers{
+		Store:      st,
+		Objects:    objAdapter,
+		Registry:   aiRegistry,
+		DeployMode: deployMode,
+	}
 
 	aih := &api.AIProviderHandlers{
 		Store:      st,
@@ -293,6 +299,8 @@ func main() {
 		r.Post("/ai-providers", aih.CreateAIProvider)
 		r.Get("/ai-providers", aih.ListAIProviders)
 		r.Post("/ai-providers/{id}/default", aih.SetDefaultAIProvider)
+		// Feedback regeneration (pre-approval only; per-tenant provider)
+		r.Post("/submissions/{id}/feedback/regenerate", fbh.Regenerate)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
