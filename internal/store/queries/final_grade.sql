@@ -20,6 +20,4 @@ SELECT
     created_at
 FROM final_grade
 WHERE tenant_id     = $1
-  AND submission_id = $2
-ORDER BY created_at DESC
-LIMIT 1;
+  AND submission_id = $2;

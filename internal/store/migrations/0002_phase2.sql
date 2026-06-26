@@ -21,12 +21,18 @@ ALTER TABLE final_grade
     ADD COLUMN IF NOT EXISTS score_100    double precision NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS graded_key   text             NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS approved_by  text             NOT NULL DEFAULT '',
-    ADD COLUMN IF NOT EXISTS approved_at  timestamptz      NOT NULL DEFAULT now();
+    ADD COLUMN IF NOT EXISTS approved_at  timestamptz;
+
+ALTER TABLE final_grade
+    ADD CONSTRAINT final_grade_tenant_submission_unique UNIQUE (tenant_id, submission_id);
 
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
+
+ALTER TABLE final_grade
+    DROP CONSTRAINT IF EXISTS final_grade_tenant_submission_unique;
 
 ALTER TABLE final_grade
     DROP COLUMN IF EXISTS approved_at,

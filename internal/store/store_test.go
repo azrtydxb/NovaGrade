@@ -176,6 +176,8 @@ func TestInsertAndListTeacherReviews(t *testing.T) {
 	require.Equal(t, "Q1", r1.QuestionNo)
 	require.Equal(t, 4.5, r1.NewMarks)
 
+	time.Sleep(2 * time.Millisecond)
+
 	// Insert review for question "Q2".
 	r2, err := st.InsertTeacherReview(ctx, InsertTeacherReviewParams{
 		TenantID:     tenantID,
@@ -189,6 +191,8 @@ func TestInsertAndListTeacherReviews(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "Q2", r2.QuestionNo)
+
+	time.Sleep(2 * time.Millisecond)
 
 	// Insert a later override for "Q1" — same question, different actor.
 	r3, err := st.InsertTeacherReview(ctx, InsertTeacherReviewParams{
