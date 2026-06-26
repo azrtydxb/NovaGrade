@@ -128,7 +128,8 @@ func (h *AnalyticsHandlers) GetAnalytics(w http.ResponseWriter, r *http.Request)
 			if errors.Is(err, errNotGradedYet) {
 				continue
 			}
-			// Unexpected error — skip this submission (best-effort analytics).
+			// Unexpected error — log and skip this submission (best-effort analytics).
+			log.Printf("analytics: skipping submission %s: %v", sub.ID, err)
 			continue
 		}
 		papers = append(papers, paper)

@@ -70,26 +70,26 @@ type startModerationRequest struct {
 }
 
 type startModerationResponse struct {
-	SessionID            string      `json:"session_id"`
-	SampledSubmissionIDs []string    `json:"sampled_submission_ids"`
-	SampleSize           int         `json:"sample_size"`
-	Status               string      `json:"status"`
+	SessionID            string   `json:"session_id"`
+	SampledSubmissionIDs []string `json:"sampled_submission_ids"`
+	SampleSize           int      `json:"sample_size"`
+	Status               string   `json:"status"`
 }
 
 type recordMarkRequest struct {
-	SubmissionID string  `json:"submission_id"`
-	QuestionNo   string  `json:"question_no"`
+	SubmissionID   string  `json:"submission_id"`
+	QuestionNo     string  `json:"question_no"`
 	ModeratorMarks float64 `json:"moderator_marks"`
 }
 
 type markComparisonEntry struct {
-	SubmissionID   string  `json:"submission_id"`
-	QuestionNo     string  `json:"question_no"`
-	AI             float64 `json:"ai"`
-	TeacherFinal   float64 `json:"teacher_final"`
-	Moderator      float64 `json:"moderator"`
+	SubmissionID    string  `json:"submission_id"`
+	QuestionNo      string  `json:"question_no"`
+	AI              float64 `json:"ai"`
+	TeacherFinal    float64 `json:"teacher_final"`
+	Moderator       float64 `json:"moderator"`
 	DeltaModTeacher float64 `json:"delta_mod_teacher"`
-	DeltaModAI     float64 `json:"delta_mod_ai"`
+	DeltaModAI      float64 `json:"delta_mod_ai"`
 }
 
 type comparisonSummary struct {
@@ -290,10 +290,10 @@ func (h *ModerationHandlers) RecordMark(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"id":           mark.ID.String(),
-		"session_id":   mark.SessionID.String(),
+		"id":            mark.ID.String(),
+		"session_id":    mark.SessionID.String(),
 		"submission_id": mark.SubmissionID.String(),
-		"question_no":  mark.QuestionNo,
+		"question_no":   mark.QuestionNo,
 	})
 }
 

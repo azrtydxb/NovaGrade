@@ -88,6 +88,9 @@ var transitions = map[SubmissionState][]SubmissionState{
 		StateGrading, // regrade re-opens an exported submission
 		StateFailed,
 	},
+	// NOTE: approved/published/exported → grading re-open edges are reachable ONLY via
+	// domain.EventRegrade (appeal regrade). A stage-result event (EventStageSucceeded)
+	// errors before CanTransition is consulted — do NOT route any other event to these edges.
 	StateFailed:   {},
 	StateArchived: {},
 }

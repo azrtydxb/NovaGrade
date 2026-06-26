@@ -15,10 +15,15 @@ package api
 //   - Audit-first ordering: InsertAuditEvent is called before any state mutation
 //     (UpdateAppealStatus, Bus.Publish). If audit fails → 500, nothing else written.
 //   - The regrade endpoint publishes a command; it does NOT write submission state.
-//     The orchestrator advances state via EventRegrade. The original graded artifact
-//     is preserved (the pipeline writes versioned graded.vN). A regrade still requires
-//     teacher approval to become final — EventRegrade targets StateGrading, and the
-//     grading stage then advances to StateTeacherReview which is the hard-stop gate.
+//     The orchestrator advances state via EventRegrade. NOTE: a regrade currently
+//     OVERWRITES graded.v1.json (the grade worker does not yet version artifacts),
+//     so the original AI graded pass is not retained across a regrade. The approved
+//     final_grade row IS immutable. A regrade still requires teacher approval to
+//     become final — EventRegrade targets StateGrading, and the grading stage then
+//     advances to StateTeacherReview which is the hard-stop gate. FOLLOW-UP: version
+//     graded artifacts (graded.v{N}) and make re-approve after a regrade UPSERT the
+//     final_grade (today the idempotent-approve path returns the original final_grade,
+//     so a regraded result does not become final).
 
 import (
 	"context"
@@ -264,8 +269,12 @@ func (h *AppealHandlers) ResolveAppeal(w http.ResponseWriter, r *http.Request) {
 //
 // The handler does NOT modify submission state directly. The orchestrator advances
 // the submission state via EventRegrade (approved/published/exported → grading).
-// The original graded artifact is never deleted — the pipeline writes versioned artifacts.
-// After regrading, the result must still pass through the teacher-approval gate.
+// NOTE: a regrade currently OVERWRITES graded.v1.json (the grade worker does not yet
+// version artifacts), so the original AI graded pass is not retained across a regrade.
+// The approved final_grade row IS immutable. FOLLOW-UP: version graded artifacts
+// (graded.v{N}) and make re-approve after a regrade UPSERT the final_grade (today the
+// idempotent-approve path returns the original final_grade, so a regraded result does
+// not become final). After regrading, the result must still pass through the teacher-approval gate.
 func (h *AppealHandlers) RegradeAppeal(w http.ResponseWriter, r *http.Request) {
 	p, ok := auth.PrincipalFromContext(r.Context())
 	if !ok {
