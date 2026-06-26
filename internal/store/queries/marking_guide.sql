@@ -45,6 +45,6 @@ ORDER BY version DESC;
 -- Sets locked=true and locked_at=now() for the given guide. Tenant-scoped.
 UPDATE marking_guide
    SET locked    = true,
-       locked_at = now()
+       locked_at = COALESCE(locked_at, now())
  WHERE tenant_id = $1
    AND id        = $2;

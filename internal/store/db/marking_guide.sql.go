@@ -183,7 +183,7 @@ func (q *Queries) ListGuideVersions(ctx context.Context, arg ListGuideVersionsPa
 const lockGuide = `-- name: LockGuide :execrows
 UPDATE marking_guide
    SET locked    = true,
-       locked_at = now()
+       locked_at = COALESCE(locked_at, now())
  WHERE tenant_id = $1
    AND id        = $2
 `
