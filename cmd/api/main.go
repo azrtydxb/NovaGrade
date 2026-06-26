@@ -24,6 +24,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -352,17 +353,27 @@ func (s *storeConfigSource) DefaultConfig(ctx context.Context, tenantID uuid.UUI
 	}
 	cfg, encKey, err := s.store.GetDefaultAIProviderConfigWithKey(ctx, tenantID)
 	if err != nil {
+		// If the tenant has no default provider config, return ErrNotFound as-is
+		// so the Registry treats it as a silent fallback. For any other error
+		// (e.g., secrets.Decrypt failure), log it before returning so real
+		// decryption/config issues are observable.
+		if errors.Is(err, store.ErrNotFound) {
+			return providers.ProviderConfig{}, err
+		}
+		log.Printf("ai-registry: tenant %s provider config error (using fallback): %v", tenantID, err)
 		return providers.ProviderConfig{}, err
 	}
 	apiKey := ""
 	if len(encKey) > 0 {
 		key, err := secrets.KeyFromEnv("INTEGRATION_ENC_KEY")
 		if err != nil {
-			return providers.ProviderConfig{}, fmt.Errorf("storeConfigSource: enc key: %w", err)
+			log.Printf("ai-registry: tenant %s provider config error (using fallback): %v", tenantID, err)
+			return providers.ProviderConfig{}, err
 		}
 		plain, err := secrets.Decrypt(key, encKey)
 		if err != nil {
-			return providers.ProviderConfig{}, fmt.Errorf("storeConfigSource: decrypt: %w", err)
+			log.Printf("ai-registry: tenant %s provider config error (using fallback): %v", tenantID, err)
+			return providers.ProviderConfig{}, err
 		}
 		apiKey = string(plain)
 	}

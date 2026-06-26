@@ -95,3 +95,27 @@ func TestRegistry_Fallback_NilSource(t *testing.T) {
 		t.Fatalf("expected fallback on nil source, got %v / %q", prov, model)
 	}
 }
+
+// TestRegistry_Fallback_OnNonNotFoundError verifies that a non-NotFound error
+// (e.g., a decrypt failure) still triggers fallback but is now observable to the caller.
+func TestRegistry_Fallback_OnNonNotFoundError(t *testing.T) {
+	decryptErr := errors.New("secrets.Decrypt: corrupted key")
+	src := fakeSource{err: decryptErr}
+	fallback := NewVLLMProvider(VLLMConfig{BaseURL: "http://fallback"})
+	reg := &Registry{
+		Source:        src,
+		Fallback:      fallback,
+		FallbackModel: "fallback-model",
+	}
+
+	prov, model := reg.Resolve(context.Background(), uuid.New())
+	// Behavior: still falls back to the env provider
+	if prov != AIProvider(fallback) {
+		t.Fatalf("expected fallback provider on decrypt error, got %v", prov)
+	}
+	if model != "fallback-model" {
+		t.Fatalf("expected fallback-model, got %q", model)
+	}
+	// The key difference: the error was logged by storeConfigSource.DefaultConfig
+	// before reaching Resolve, making the issue observable.
+}
