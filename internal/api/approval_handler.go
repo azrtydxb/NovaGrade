@@ -26,11 +26,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/azrtydxb/novagrade/internal/auth"
-	"github.com/azrtydxb/novagrade/internal/domain"
 	"github.com/azrtydxb/novagrade/internal/store"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 )
@@ -75,7 +73,7 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sub, tenantID, ok := h.fetchAndAuthorize(w, r, p)
+	sub, tenantID, ok := fetchAndAuthorize(w, r, p, h.Store, actionReviewFixApprove, h.DeployMode)
 	if !ok {
 		return
 	}
@@ -227,7 +225,7 @@ func (h *ApprovalHandlers) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sub, tenantID, ok := h.fetchAndAuthorize(w, r, p)
+	sub, tenantID, ok := fetchAndAuthorize(w, r, p, h.Store, actionReviewFixApprove, h.DeployMode)
 	if !ok {
 		return
 	}
@@ -286,7 +284,7 @@ func (h *ApprovalHandlers) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sub, tenantID, ok := h.fetchAndAuthorize(w, r, p)
+	sub, tenantID, ok := fetchAndAuthorize(w, r, p, h.Store, actionReviewFixApprove, h.DeployMode)
 	if !ok {
 		return
 	}
@@ -326,50 +324,3 @@ func (h *ApprovalHandlers) Export(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-// fetchAndAuthorize fetches the submission by URL param {id}, checks RBAC
-// (ActionReviewFixApprove) and tenant isolation. Returns (sub, tenantID, true)
-// on success, writes 4xx and returns (_, _, false) on failure.
-func (h *ApprovalHandlers) fetchAndAuthorize(
-	w http.ResponseWriter,
-	r *http.Request,
-	p auth.Principal,
-) (store.Submission, uuid.UUID, bool) {
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
-		return store.Submission{}, uuid.UUID{}, false
-	}
-
-	sub, err := h.Store.GetSubmission(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "not found", http.StatusNotFound)
-			return store.Submission{}, uuid.UUID{}, false
-		}
-		http.Error(w, "store error", http.StatusInternalServerError)
-		return store.Submission{}, uuid.UUID{}, false
-	}
-
-	rctx := domain.ResourceCtx{
-		PrincipalTenants: []string{p.TenantID},
-		ResourceTenantID: sub.TenantID.String(),
-		DeployMode:       h.DeployMode,
-	}
-	if !domain.Can(p.Roles, domain.ActionReviewFixApprove, rctx) {
-		http.Error(w, "not found", http.StatusNotFound)
-		return store.Submission{}, uuid.UUID{}, false
-	}
-
-	tenantID, err := uuid.Parse(p.TenantID)
-	if err != nil {
-		http.Error(w, "invalid tenant", http.StatusBadRequest)
-		return store.Submission{}, uuid.UUID{}, false
-	}
-
-	return sub, tenantID, true
-}

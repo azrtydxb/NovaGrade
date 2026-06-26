@@ -27,15 +27,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/azrtydxb/novagrade/internal/auth"
-	"github.com/azrtydxb/novagrade/internal/domain"
 	"github.com/azrtydxb/novagrade/internal/store"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 )
@@ -73,36 +72,8 @@ func (h *ExportHandlers) ExportCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
-		return
-	}
-
-	sub, err := h.Store.GetSubmission(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "store error", http.StatusInternalServerError)
-		return
-	}
-
-	rctx := domain.ResourceCtx{
-		PrincipalTenants: []string{p.TenantID},
-		ResourceTenantID: sub.TenantID.String(),
-		DeployMode:       h.DeployMode,
-	}
-	if !domain.Can(p.Roles, domain.ActionViewResults, rctx) {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
-	tenantID, err := uuid.Parse(p.TenantID)
-	if err != nil {
-		http.Error(w, "invalid tenant", http.StatusBadRequest)
+	sub, tenantID, ok := fetchAndAuthorize(w, r, p, h.Store, actionViewResults, h.DeployMode)
+	if !ok {
 		return
 	}
 
@@ -154,6 +125,9 @@ func (h *ExportHandlers) ExportCSV(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cw.Flush()
+	if err := cw.Error(); err != nil {
+		log.Printf("export: csv write/flush error for submission %s: %v", sub.ID, err)
+	}
 }
 
 // errNotGradedYet is a sentinel returned by effectivePaper when no graded

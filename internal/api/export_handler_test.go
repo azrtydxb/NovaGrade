@@ -252,8 +252,6 @@ func TestExportCSV_LiveGradedWithOverride(t *testing.T) {
 	assert.Equal(t, "10", q1[2])      // max_marks
 	assert.Equal(t, "9", q1[3])       // awarded_marks (overridden)
 	assert.Equal(t, "partial;check", q1[6]) // flags (index 6)
-	// Verify awarded_marks via CSV column index
-	assert.Equal(t, "9", rows[1][3], "overridden awarded_marks must be 9")
 
 	// Question 2: no override → original 3.0.
 	q2 := rows[2]
