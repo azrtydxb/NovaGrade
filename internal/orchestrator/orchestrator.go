@@ -271,6 +271,12 @@ func StageToEvent(stage string) (domain.Event, error) {
 		return domain.EventSubmitExam, nil
 	case "approve_for_grading":
 		return domain.EventApproveForGrading, nil
+	case contracts.StageApprove:
+		return domain.EventApproveByTeacher, nil
+	case contracts.StagePublish:
+		return domain.EventPublish, nil
+	case contracts.StageExport:
+		return domain.EventExport, nil
 	case "apply_fix":
 		return domain.EventApplyFix, nil
 	case "retry_stage":

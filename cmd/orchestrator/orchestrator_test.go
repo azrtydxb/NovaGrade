@@ -334,6 +334,100 @@ func TestHandleEnvelope_GradeResultRedelivered_DoesNotCrossApprovalGate(t *testi
 	}
 }
 
+// Phase 2: an approve command (Stage=approve) for a submission in teacher_review
+// advances state to approved and dispatches NO work-queue message (approved is a
+// human-command-only state — automatic dispatch does not apply).
+func TestHandleEnvelope_ApproveCommand_AdvancesToApproved_NoDispatch(t *testing.T) {
+	subID := uuid.New()
+
+	st := &fakeStore{sub: store.Submission{ID: subID, TenantID: testTenant, State: contracts.StateTeacherReview}}
+	bus := &fakeBus{}
+	art := &fakeArtifacts{objects: map[string][]byte{}}
+	o := NewOrchestrator(st, bus, art, testBucket)
+
+	env := contracts.Envelope{
+		TenantID:     testTenant.String(),
+		SubmissionID: subID.String(),
+		Stage:        contracts.StageApprove,
+	}
+	if err := o.HandleEnvelope(env); err != nil {
+		t.Fatalf("HandleEnvelope: %v", err)
+	}
+
+	if len(st.setStateCalls) != 1 {
+		t.Fatalf("want 1 SetSubmissionState call, got %d: %v", len(st.setStateCalls), st.setStateCalls)
+	}
+	if st.setStateCalls[0] != contracts.StateApproved {
+		t.Fatalf("want state approved, got %s", st.setStateCalls[0])
+	}
+	// No work-queue dispatch for approved state.
+	if len(bus.published) != 0 {
+		t.Fatalf("want 0 dispatches after approve, got %d: %+v", len(bus.published), bus.published)
+	}
+}
+
+// Phase 2: a publish command (Stage=publish) for a submission in approved
+// advances state to published with NO work-queue dispatch.
+func TestHandleEnvelope_PublishCommand_AdvancesToPublished_NoDispatch(t *testing.T) {
+	subID := uuid.New()
+
+	st := &fakeStore{sub: store.Submission{ID: subID, TenantID: testTenant, State: contracts.StateApproved}}
+	bus := &fakeBus{}
+	art := &fakeArtifacts{objects: map[string][]byte{}}
+	o := NewOrchestrator(st, bus, art, testBucket)
+
+	env := contracts.Envelope{
+		TenantID:     testTenant.String(),
+		SubmissionID: subID.String(),
+		Stage:        contracts.StagePublish,
+	}
+	if err := o.HandleEnvelope(env); err != nil {
+		t.Fatalf("HandleEnvelope: %v", err)
+	}
+
+	if len(st.setStateCalls) != 1 {
+		t.Fatalf("want 1 SetSubmissionState call, got %d: %v", len(st.setStateCalls), st.setStateCalls)
+	}
+	if st.setStateCalls[0] != contracts.StatePublished {
+		t.Fatalf("want state published, got %s", st.setStateCalls[0])
+	}
+	// No work-queue dispatch for published state.
+	if len(bus.published) != 0 {
+		t.Fatalf("want 0 dispatches after publish, got %d: %+v", len(bus.published), bus.published)
+	}
+}
+
+// Phase 2: an export command (Stage=export) for a submission in published
+// advances state to exported with NO work-queue dispatch.
+func TestHandleEnvelope_ExportCommand_AdvancesToExported_NoDispatch(t *testing.T) {
+	subID := uuid.New()
+
+	st := &fakeStore{sub: store.Submission{ID: subID, TenantID: testTenant, State: contracts.StatePublished}}
+	bus := &fakeBus{}
+	art := &fakeArtifacts{objects: map[string][]byte{}}
+	o := NewOrchestrator(st, bus, art, testBucket)
+
+	env := contracts.Envelope{
+		TenantID:     testTenant.String(),
+		SubmissionID: subID.String(),
+		Stage:        contracts.StageExport,
+	}
+	if err := o.HandleEnvelope(env); err != nil {
+		t.Fatalf("HandleEnvelope: %v", err)
+	}
+
+	if len(st.setStateCalls) != 1 {
+		t.Fatalf("want 1 SetSubmissionState call, got %d: %v", len(st.setStateCalls), st.setStateCalls)
+	}
+	if st.setStateCalls[0] != contracts.StateExported {
+		t.Fatalf("want state exported, got %s", st.setStateCalls[0])
+	}
+	// No work-queue dispatch for exported (terminal) state.
+	if len(bus.published) != 0 {
+		t.Fatalf("want 0 dispatches after export, got %d: %+v", len(bus.published), bus.published)
+	}
+}
+
 // FIX 3: an envelope whose TenantID does not match the persisted submission's
 // tenant is dropped without transitioning state — no state write, no dispatch.
 func TestHandleEnvelope_TenantMismatch_NoStateChangeNoDispatch(t *testing.T) {

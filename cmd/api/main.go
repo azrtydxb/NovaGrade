@@ -114,6 +114,13 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	ah := &api.ApprovalHandlers{
+		Store:      st,
+		Objects:    objAdapter,
+		Bus:        bus,
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -128,6 +135,9 @@ func main() {
 		r.Get("/submissions/{id}/result", h.GetResult)
 		r.Get("/submissions/{id}/review", rh.GetReview)
 		r.Patch("/submissions/{id}/questions/{qno}", rh.PatchQuestion)
+		r.Post("/submissions/{id}/approve", ah.Approve)
+		r.Post("/submissions/{id}/publish", ah.Publish)
+		r.Post("/submissions/{id}/export", ah.Export)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
