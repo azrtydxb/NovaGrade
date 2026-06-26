@@ -30,6 +30,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -39,7 +40,9 @@ import (
 	"github.com/azrtydxb/novagrade/internal/domain"
 	"github.com/azrtydxb/novagrade/internal/integration"
 	integrationcsv "github.com/azrtydxb/novagrade/internal/integration/csv"
+	"github.com/azrtydxb/novagrade/internal/integration/webhook"
 	"github.com/azrtydxb/novagrade/internal/queue"
+	"github.com/azrtydxb/novagrade/internal/secrets"
 	"github.com/azrtydxb/novagrade/internal/store"
 )
 
@@ -116,11 +119,26 @@ func main() {
 		DeployMode: deployMode,
 	}
 
-	ah := &api.ApprovalHandlers{
+	// ── Webhook setup ─────────────────────────────────────────────────────────
+	// encKey may be nil in dev/test — handlers nil-guard against this.
+	encKey, _ := secrets.KeyFromEnv("INTEGRATION_ENC_KEY")
+
+	webhookSender := webhook.NewSender(10*time.Second, 3)
+
+	wh := &api.WebhookHandlers{
 		Store:      st,
-		Objects:    objAdapter,
-		Bus:        bus,
+		EncKey:     encKey,
 		DeployMode: deployMode,
+	}
+
+	ah := &api.ApprovalHandlers{
+		Store:         st,
+		Objects:       objAdapter,
+		Bus:           bus,
+		DeployMode:    deployMode,
+		WebhookSender: webhookSender,
+		WebhookStore:  st,
+		WebhookKey:    encKey,
 	}
 
 	eh := &api.ExportHandlers{
@@ -189,6 +207,10 @@ func main() {
 		r.Post("/integrations", ih.UpsertIntegration)
 		r.Get("/integrations", ih.ListIntegrations)
 		r.Delete("/integrations/{id}", ih.DeleteIntegration)
+		// Webhook subscription management
+		r.Post("/webhooks", wh.Create)
+		r.Get("/webhooks", wh.List)
+		r.Delete("/webhooks/{id}", wh.Delete)
 		// Roster import
 		r.Post("/rosters/import", roh.ImportRoster)
 		// Class-results CSV export

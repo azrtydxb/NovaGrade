@@ -29,6 +29,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/azrtydxb/novagrade/internal/auth"
+	"github.com/azrtydxb/novagrade/internal/integration/webhook"
 	"github.com/azrtydxb/novagrade/internal/store"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 )
@@ -48,6 +49,11 @@ type ApprovalHandlers struct {
 	Objects    ObjectStore // same interface as Handlers.Objects / ReviewHandlers.Objects
 	Bus        CommandBus  // same interface as Handlers.Bus
 	DeployMode string      // "saas" or "onprem"
+
+	// Webhook dispatch (optional — nil means no webhooks fired).
+	WebhookSender *webhook.Sender
+	WebhookStore  webhook.WebhookStore // subset interface from dispatch.go
+	WebhookKey    []byte               // AES-256-GCM key; nil means no webhooks fired
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -264,6 +270,19 @@ func (h *ApprovalHandlers) Publish(w http.ResponseWriter, r *http.Request) {
 	if err := h.Bus.Publish(r.Context(), "commands.q", env); err != nil {
 		http.Error(w, "bus error", http.StatusInternalServerError)
 		return
+	}
+
+	// Fire webhook dispatch asynchronously — fire-and-forget; failures are logged.
+	if h.WebhookSender != nil && h.WebhookStore != nil && len(h.WebhookKey) == 32 {
+		go func() {
+			whEvent := webhook.Event{
+				Type:         "published",
+				TenantID:     sub.TenantID.String(),
+				SubmissionID: sub.ID.String(),
+				OccurredAt:   time.Now().UTC(),
+			}
+			webhook.Dispatch(context.Background(), h.WebhookStore, h.WebhookSender, h.WebhookKey, sub.TenantID, whEvent)
+		}()
 	}
 
 	w.WriteHeader(http.StatusOK)
