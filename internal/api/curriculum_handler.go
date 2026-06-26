@@ -239,6 +239,10 @@ func (h *CurriculumHandlers) MapQuestionOutcome(w http.ResponseWriter, r *http.R
 		OutcomeID:           outcomeID,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrDuplicate) {
+			http.Error(w, "mapping already exists", http.StatusConflict)
+			return
+		}
 		http.Error(w, "store error", http.StatusInternalServerError)
 		return
 	}

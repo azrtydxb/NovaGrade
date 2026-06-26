@@ -328,6 +328,87 @@ func TestCurriculumMapQuestion_ForeignOutcome(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code, "must not map to another tenant's outcome")
 }
 
+// TestCurriculumListOutcomes_WithData verifies GET /v1/outcomes returns the
+// seeded outcome in the response body (non-empty list).
+func TestCurriculumListOutcomes_WithData(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeStore := newCurriculumFakeStore()
+	h := &api.CurriculumHandlers{Store: fakeStore, DeployMode: "onprem"}
+
+	seeded := fakeStore.seedOutcome(tenantID, "SC2.3")
+
+	principal := auth.Principal{
+		ID:       "admin-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleSchoolAdmin},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/outcomes", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	buildCurriculumRouter(t, h, auth.NewAPIKeyResolver()).ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp []map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp, 1, "expected exactly one outcome")
+	assert.Equal(t, seeded.Code, resp[0]["code"])
+	assert.Equal(t, seeded.Description, resp[0]["description"])
+}
+
+// TestCurriculumListQuestionOutcomes_WithMapping verifies that
+// GET /v1/assessment-versions/{avid}/question-outcomes returns the mapping
+// that was previously created via POST.
+func TestCurriculumListQuestionOutcomes_WithMapping(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeStore := newCurriculumFakeStore()
+	h := &api.CurriculumHandlers{Store: fakeStore, DeployMode: "onprem"}
+
+	outcome := fakeStore.seedOutcome(tenantID, "MA3.1")
+	avid := fakeStore.seedAV(tenantID)
+
+	principal := auth.Principal{
+		ID:       "admin-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleSchoolAdmin},
+	}
+	tok := issueToken(t, principal)
+
+	// Seed a mapping via POST.
+	body := fmt.Sprintf(`{"question_no":"2b","outcome_id":%q}`, outcome.ID.String())
+	postReq := httptest.NewRequest(http.MethodPost,
+		"/v1/assessment-versions/"+avid.String()+"/question-outcomes",
+		bytes.NewBufferString(body))
+	postReq.Header.Set("Authorization", "Bearer "+tok)
+	postReq.Header.Set("Content-Type", "application/json")
+	postRec := httptest.NewRecorder()
+	buildCurriculumRouter(t, h, auth.NewAPIKeyResolver()).ServeHTTP(postRec, postReq)
+	require.Equal(t, http.StatusCreated, postRec.Code, "POST body: %s", postRec.Body.String())
+
+	// Now GET the list.
+	getReq := httptest.NewRequest(http.MethodGet,
+		"/v1/assessment-versions/"+avid.String()+"/question-outcomes",
+		nil)
+	getReq.Header.Set("Authorization", "Bearer "+tok)
+	getRec := httptest.NewRecorder()
+	buildCurriculumRouter(t, h, auth.NewAPIKeyResolver()).ServeHTTP(getRec, getReq)
+
+	require.Equal(t, http.StatusOK, getRec.Code, "GET body: %s", getRec.Body.String())
+
+	var resp []map[string]any
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &resp))
+	require.Len(t, resp, 1, "expected exactly one mapping")
+	assert.Equal(t, "2b", resp[0]["question_no"])
+	assert.Equal(t, outcome.ID.String(), resp[0]["outcome_id"])
+}
+
 // TestCurriculumMapQuestion_CrossTenantAVID verifies that mapping against an
 // avid owned by tenant B (caller is tenant A) → 404.
 func TestCurriculumMapQuestion_CrossTenantAVID(t *testing.T) {

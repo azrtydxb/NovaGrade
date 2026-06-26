@@ -33,6 +33,9 @@ import (
 // ErrNotFound is returned by Store methods when the requested record does not exist.
 var ErrNotFound = errors.New("store: not found")
 
+// ErrDuplicate is returned by Store methods when a unique constraint is violated.
+var ErrDuplicate = errors.New("store: duplicate")
+
 // migrationFS holds the embedded SQL migration files.
 //
 //go:embed migrations/*.sql

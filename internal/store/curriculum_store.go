@@ -138,7 +138,7 @@ func (s *Store) MapQuestionOutcome(ctx context.Context, p MapQuestionOutcomePara
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return QuestionOutcome{}, fmt.Errorf("store: MapQuestionOutcome: duplicate mapping for question %q: %w", p.QuestionNo, err)
+			return QuestionOutcome{}, fmt.Errorf("store: MapQuestionOutcome: duplicate mapping for question %q: %w", p.QuestionNo, ErrDuplicate)
 		}
 		return QuestionOutcome{}, fmt.Errorf("store: MapQuestionOutcome: %w", err)
 	}
