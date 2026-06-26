@@ -171,3 +171,56 @@ func TestNextState_UnknownEvent(t *testing.T) {
 	_, err := domain.NextState(contracts.StateUploaded, domain.Event("UnknownEvent"), nil)
 	assert.Error(t, err)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EventRegrade tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestNextState_Regrade_FromApproved verifies regrade re-opens an approved submission.
+func TestNextState_Regrade_FromApproved(t *testing.T) {
+	next, err := domain.NextState(contracts.StateApproved, domain.EventRegrade, nil)
+	require.NoError(t, err)
+	assert.Equal(t, contracts.StateGrading, next)
+}
+
+// TestNextState_Regrade_FromPublished verifies regrade re-opens a published submission.
+func TestNextState_Regrade_FromPublished(t *testing.T) {
+	next, err := domain.NextState(contracts.StatePublished, domain.EventRegrade, nil)
+	require.NoError(t, err)
+	assert.Equal(t, contracts.StateGrading, next)
+}
+
+// TestNextState_Regrade_FromExported verifies regrade re-opens an exported submission.
+func TestNextState_Regrade_FromExported(t *testing.T) {
+	next, err := domain.NextState(contracts.StateExported, domain.EventRegrade, nil)
+	require.NoError(t, err)
+	assert.Equal(t, contracts.StateGrading, next)
+}
+
+// TestNextState_Regrade_FromGradingReviewRequired verifies regrade re-opens grading_review_required.
+func TestNextState_Regrade_FromGradingReviewRequired(t *testing.T) {
+	next, err := domain.NextState(contracts.StateGradingReviewRequired, domain.EventRegrade, nil)
+	require.NoError(t, err)
+	assert.Equal(t, contracts.StateGrading, next)
+}
+
+// TestNextState_Regrade_InvalidFromTranscribing verifies regrade errors from an unsupported state.
+func TestNextState_Regrade_InvalidFromTranscribing(t *testing.T) {
+	_, err := domain.NextState(contracts.StateTranscribing, domain.EventRegrade, nil)
+	assert.Error(t, err, "EventRegrade must not be valid from transcribing")
+}
+
+// TestNextState_StageSucceeded_TeacherReviewHardStop_Regrade verifies that EventRegrade
+// does NOT bypass the teacher-approval gate — it only re-opens post-approved states back
+// to grading. A stage-result event STILL cannot cross teacher_review.
+func TestNextState_StageSucceeded_TeacherReviewGuardUnchanged(t *testing.T) {
+	// Stage-result still cannot cross teacher_review (regression guard).
+	next, err := domain.NextState(contracts.StateTeacherReview, domain.EventStageSucceeded, nil)
+	require.NoError(t, err)
+	assert.Equal(t, contracts.StateTeacherReview, next,
+		"EventStageSucceeded must never advance past teacher_review gate")
+
+	// EventRegrade from teacher_review is also invalid (still waiting for approval).
+	_, err = domain.NextState(contracts.StateTeacherReview, domain.EventRegrade, nil)
+	assert.Error(t, err, "EventRegrade must not re-open teacher_review (it's not yet approved)")
+}

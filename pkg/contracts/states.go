@@ -74,15 +74,18 @@ var transitions = map[SubmissionState][]SubmissionState{
 	},
 	StateApproved: {
 		StatePublished,
+		StateGrading, // regrade re-opens an approved submission
 		StateFailed,
 	},
 	StatePublished: {
 		StateExported,
 		StateArchived,
+		StateGrading, // regrade re-opens a published submission
 		StateFailed,
 	},
 	StateExported: {
 		StateArchived,
+		StateGrading, // regrade re-opens an exported submission
 		StateFailed,
 	},
 	StateFailed:   {},

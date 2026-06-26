@@ -196,6 +196,12 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	aph := &api.AppealHandlers{
+		Store:      st,
+		Bus:        bus,
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -240,6 +246,11 @@ func main() {
 		r.Post("/assessment-versions/{avid}/moderation", moh.StartSession)
 		r.Post("/moderation/{id}/marks", moh.RecordMark)
 		r.Get("/moderation/{id}", moh.GetComparison)
+		// Appeals / regrade workflow
+		r.Post("/submissions/{id}/appeals", aph.FileAppeal)
+		r.Get("/appeals", aph.ListAppeals)
+		r.Post("/appeals/{id}/resolve", aph.ResolveAppeal)
+		r.Post("/appeals/{id}/regrade", aph.RegradeAppeal)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")

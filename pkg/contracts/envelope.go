@@ -37,3 +37,8 @@ const (
 	StageExportResult     string = "export.result"
 	StageFeedbackResult   string = "feedback.result"
 )
+
+// Appeal / regrade command event type.
+const (
+	StageRegrade string = "regrade"
+)

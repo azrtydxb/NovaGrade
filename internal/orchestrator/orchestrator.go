@@ -283,6 +283,8 @@ func StageToEvent(stage string) (domain.Event, error) {
 		return domain.EventRetryStage, nil
 	case "flagged_for_review":
 		return domain.EventFlaggedForReview, nil
+	case contracts.StageRegrade:
+		return domain.EventRegrade, nil
 	}
 	return "", fmt.Errorf("unknown stage %q", stage)
 }

@@ -29,6 +29,12 @@ const (
 	EventApproveByTeacher Event = "ApproveByTeacher" // teacher_review → approved
 	EventPublish          Event = "Publish"          // approved → published
 	EventExport           Event = "Export"           // published → exported
+
+	// EventRegrade re-opens an approved/published/exported/grading_review_required
+	// submission back to grading for a fresh marking pass. After regrading the
+	// result must still flow through the teacher-approval gate to become final —
+	// this event NEVER bypasses that gate.
+	EventRegrade Event = "Regrade"
 )
 
 // QualityFlag is a flag set when transcription quality is suspect.
@@ -128,6 +134,13 @@ func computeNext(cur contracts.SubmissionState, ev Event, flags []QualityFlag) (
 			return contracts.StateExported, nil
 		}
 		return cur, fmt.Errorf("domain: EventExport invalid from state %s", cur)
+
+	case EventRegrade:
+		switch cur {
+		case contracts.StateApproved, contracts.StatePublished, contracts.StateExported, contracts.StateGradingReviewRequired:
+			return contracts.StateGrading, nil
+		}
+		return cur, fmt.Errorf("domain: EventRegrade invalid from state %s", cur)
 
 	default:
 		return cur, fmt.Errorf("domain: unknown event %q", ev)
