@@ -127,6 +127,11 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	gh := &api.GuideHandlers{
+		Store:      st,
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -145,6 +150,11 @@ func main() {
 		r.Post("/submissions/{id}/publish", ah.Publish)
 		r.Post("/submissions/{id}/export", ah.Export)
 		r.Get("/submissions/{id}/export.csv", eh.ExportCSV)
+		// Guide management
+		r.Post("/assessment-versions/{avid}/guides", gh.ImportGuide)
+		r.Get("/assessment-versions/{avid}/guides", gh.ListGuides)
+		r.Get("/assessment-versions/{avid}/guides/latest", gh.GetLatestGuide)
+		r.Post("/guides/{id}/lock", gh.LockGuide)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
