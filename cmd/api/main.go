@@ -184,6 +184,12 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	anah := &api.AnalyticsHandlers{
+		Store:      st,
+		Objects:    objAdapter,
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -221,6 +227,9 @@ func main() {
 		r.Post("/rosters/import", roh.ImportRoster)
 		// Class-results CSV export
 		r.Get("/assessment-versions/{avid}/results.csv", crh.ClassResultsCSV)
+		// Analytics
+		r.Get("/assessment-versions/{avid}/analytics", anah.GetAnalytics)
+		r.Get("/assessment-versions/{avid}/override-stats", anah.GetOverrideStats)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
