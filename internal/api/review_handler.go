@@ -155,9 +155,10 @@ func (h *ReviewHandlers) GetReview(w http.ResponseWriter, r *http.Request) {
 //  3. Load graded.v1.json, overlay existing reviews → find the current effective
 //     value of the requested question. 404 if question_no absent.
 //  4. Clamp awarded_marks to [0, question.MaxMarks].
-//  5. InsertTeacherReview (OldMarks = current effective, NewMarks = new).
-//  6. InsertAuditEvent (entity_type="submission", action="override_question",
+//  5. InsertAuditEvent FIRST (entity_type="submission", action="override_question",
 //     old_value/new_value JSON, actor=principal id, reason=comment).
+//     On error → 500; no teacher_review row is written (audit gates the override).
+//  6. InsertTeacherReview (OldMarks = current effective, NewMarks = new).
 //  7. Return the updated effective question (200).
 func (h *ReviewHandlers) PatchQuestion(w http.ResponseWriter, r *http.Request) {
 	p, ok := auth.PrincipalFromContext(r.Context())
@@ -281,22 +282,6 @@ func (h *ReviewHandlers) PatchQuestion(w http.ResponseWriter, r *http.Request) {
 		comment = *body.Comment
 	}
 
-	// Write teacher_review row.
-	_, err = h.Store.InsertTeacherReview(r.Context(), store.InsertTeacherReviewParams{
-		TenantID:     tenantID,
-		SubmissionID: sub.ID,
-		QuestionNo:   qno,
-		OldMarks:     oldMarks,
-		NewMarks:     newMarks,
-		Feedback:     newFeedback,
-		Comment:      comment,
-		Actor:        p.ID,
-	})
-	if err != nil {
-		http.Error(w, "store error", http.StatusInternalServerError)
-		return
-	}
-
 	// Serialize old/new for audit trail.
 	oldValueJSON, _ := json.Marshal(map[string]interface{}{
 		"question_no":   qno,
@@ -309,6 +294,9 @@ func (h *ReviewHandlers) PatchQuestion(w http.ResponseWriter, r *http.Request) {
 		"justification": newFeedback,
 	})
 
+	// Write audit event FIRST — it gates the override.
+	// If the audit write fails we return 500 and do NOT persist the teacher_review
+	// row, so no un-audited mark change can ever reach the database.
 	subID := sub.ID
 	_, err = h.Store.InsertAuditEvent(r.Context(), store.InsertAuditEventParams{
 		TenantID:   tenantID,
@@ -321,9 +309,25 @@ func (h *ReviewHandlers) PatchQuestion(w http.ResponseWriter, r *http.Request) {
 		Reason:     comment,
 	})
 	if err != nil {
-		// Audit failure is non-fatal for the caller but worth logging.
-		// In a production system we'd use structured logging.
 		http.Error(w, "store error (audit)", http.StatusInternalServerError)
+		return
+	}
+
+	// Audit recorded — now persist the override row.
+	// If this fails the result is an audit event for an override that didn't
+	// persist, which is benign and far safer than the reverse ordering.
+	_, err = h.Store.InsertTeacherReview(r.Context(), store.InsertTeacherReviewParams{
+		TenantID:     tenantID,
+		SubmissionID: sub.ID,
+		QuestionNo:   qno,
+		OldMarks:     oldMarks,
+		NewMarks:     newMarks,
+		Feedback:     newFeedback,
+		Comment:      comment,
+		Actor:        p.ID,
+	})
+	if err != nil {
+		http.Error(w, "store error", http.StatusInternalServerError)
 		return
 	}
 

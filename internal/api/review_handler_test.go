@@ -40,6 +40,10 @@ type ReviewFakeStore struct {
 	submissions  map[uuid.UUID]store.Submission
 	reviews      []store.TeacherReview
 	auditEvents  []store.AuditEvent
+	// failAudit, when true, makes InsertAuditEvent return an error.
+	// Use this to test that a failed audit write prevents the teacher_review row
+	// from being written (audit-gates-the-override ordering).
+	failAudit bool
 }
 
 func newReviewFakeStore() *ReviewFakeStore {
@@ -92,6 +96,9 @@ func (f *ReviewFakeStore) ListTeacherReviews(_ context.Context, tenantID, submis
 func (f *ReviewFakeStore) InsertAuditEvent(_ context.Context, p store.InsertAuditEventParams) (store.AuditEvent, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.failAudit {
+		return store.AuditEvent{}, fmt.Errorf("simulated audit insert failure")
+	}
 	ev := store.AuditEvent{
 		ID:         uuid.New(),
 		TenantID:   p.TenantID,
@@ -819,6 +826,60 @@ func TestGetReview_NoGradedArtifact(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+// TestPatchQuestion_AuditFailurePreventsOverride verifies the audit-gates-the-override
+// ordering: when InsertAuditEvent returns an error, the handler must respond with
+// 500 AND must NOT persist any teacher_review row. This ensures that no un-audited
+// mark change can ever reach the database.
+func TestPatchQuestion_AuditFailurePreventsOverride(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeReviewStore := newReviewFakeStore()
+	fakeReviewStore.failAudit = true // force InsertAuditEvent to fail
+	fakeObjects := NewFakeObjectStore()
+
+	sub := fakeReviewStore.seedSubmission(tenantID, contracts.StateTeacherReview)
+	makeGradedPaper(t, fakeObjects, tenantID, sub.ID)
+
+	h := &api.ReviewHandlers{
+		Store:      fakeReviewStore,
+		Objects:    fakeObjects,
+		DeployMode: "onprem",
+	}
+
+	principal := auth.Principal{
+		ID:       "teacher-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"awarded_marks": 9.0,
+		"comment":       "should not persist",
+	})
+	req := httptest.NewRequest(http.MethodPatch,
+		"/v1/submissions/"+sub.ID.String()+"/questions/1",
+		bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router := buildReviewRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	// Must return 500 when the audit write fails.
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	// Critical: zero teacher_review rows must have been written.
+	// An un-audited override must never persist.
+	assert.Equal(t, 0, fakeReviewStore.reviewCount(),
+		"teacher_review row must NOT be written when audit event fails")
+
+	// Zero audit events too (the failure happened before any row was appended).
+	assert.Equal(t, 0, fakeReviewStore.auditCount())
 }
 
 // TestPatchQuestion_SecondOverrideUsesLatestEffective verifies that when a second
