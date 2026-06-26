@@ -14,17 +14,6 @@ import (
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-// panicProvider fails the test if Complete is ever called. Use it to assert
-// that a deterministic match type never reaches the AI provider.
-type panicProvider struct {
-	t *testing.T
-}
-
-func (p *panicProvider) Complete(_ context.Context, _ interface{}) (interface{}, error) {
-	p.t.Fatal("panicProvider.Complete must not be called for deterministic match types")
-	return nil, nil
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Numeric matcher
 // ─────────────────────────────────────────────────────────────────────────────
@@ -485,16 +474,6 @@ func TestNormalize_ConfidenceIsOne(t *testing.T) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Guard: deterministic match types must NOT invoke the provider
 // ─────────────────────────────────────────────────────────────────────────────
-
-// failProvider fails the test immediately if Complete is ever called.
-type failProvider struct {
-	t *testing.T
-}
-
-func (f *failProvider) Complete(_ context.Context, req interface{}) (interface{}, error) {
-	f.t.Fatal("provider.Complete must NOT be called for deterministic match types")
-	return nil, nil
-}
 
 func TestGuideMarkScheme_Numeric_NoProviderCall(t *testing.T) {
 	// Create a real failing provider wired into a GuideMarkScheme with a numeric entry.

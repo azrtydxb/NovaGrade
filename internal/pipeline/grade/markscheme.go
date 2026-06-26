@@ -4,9 +4,10 @@
 // Open-ended entries (rubric) and questions absent from the guide fall back to
 // an LLMJudge.
 //
-// Phase-3 match types (partial, method, multi-step, tolerance, units) are NOT
-// implemented in this package; any entry carrying those types falls through to
-// the fallback LLMJudge.
+// Phase-3 match types are deterministically implemented:
+// numeric, multi_step, partial, normalize are evaluated without LLM.
+// Only rubric entries and unknown/absent match types fall through to the
+// fallback LLMJudge.
 package grade
 
 import (

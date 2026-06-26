@@ -178,6 +178,9 @@ func MatchNumeric(entry GuideEntry, studentAnswer string) (float64, float64, str
 		}
 		// Value correct but unit wrong/missing: award value marks only.
 		valueMarks := maxMarks - entry.UnitMarks
+		if valueMarks < 0 {
+			valueMarks = 0
+		}
 		return valueMarks, 1.0, fmt.Sprintf(
 			"value %g correct but unit wrong or missing (expected %q)", parsed, entry.Unit,
 		)
@@ -303,6 +306,7 @@ func MatchPartial(entry GuideEntry, studentAnswer string) (float64, float64, str
 
 	for _, criterion := range entry.Criteria {
 		for _, accept := range criterion.Accept {
+			// TODO(phase3+): substring containment can match negated phrases (e.g. "no chlorophyll" matches criterion "chlorophyll"). Acceptable known limit; a future improvement could check for preceding negation ("no"/"not"/"without").
 			if strings.Contains(lowerAnswer, strings.ToLower(accept)) {
 				total += criterion.Marks
 				hitCount++
