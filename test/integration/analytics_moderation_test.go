@@ -329,9 +329,9 @@ func TestAnalyticsModerationFlow(t *testing.T) {
 		an.GradedCount, an.TotalCount, len(an.ItemAnalysis), an.Distribution.Count)
 
 	require.NotEmpty(t, an.ItemAnalysis, "item_analysis must contain at least one question")
-	assert.Equal(t, nSubs, an.GradedCount, "graded_count must equal the number of graded submissions")
-	assert.Equal(t, nSubs, an.TotalCount, "total_count must equal the number of submissions for the AVID")
-	assert.Equal(t, nSubs, an.Distribution.Count,
+	require.Equal(t, nSubs, an.GradedCount, "graded_count must equal the number of graded submissions")
+	require.Equal(t, nSubs, an.TotalCount, "total_count must equal the number of submissions for the AVID")
+	require.Equal(t, nSubs, an.Distribution.Count,
 		"distribution.count must equal the number of graded submissions")
 
 	// Locate the 1a stat and assert MaxMarks + Responses reflect the known marks.
@@ -399,6 +399,9 @@ func TestAnalyticsModerationFlow(t *testing.T) {
 	var cmp comparisonResp
 	getJSON(t, apiURL, adminJWT, fmt.Sprintf("/v1/moderation/%s", sessionID), &cmp)
 	require.Len(t, cmp.Marks, 1, "comparison must contain the single recorded mark")
+	require.Equal(t, 1, cmp.Summary.Count, "summary.count must equal the number of moderated marks")
+	require.Equal(t, 1.0, cmp.Summary.MeanAbsModTeacherDelta,
+		"mean_abs_mod_teacher_delta must reflect moderator vs teacher_final delta (1.0 − 2.0 = −1.0, abs = 1.0)")
 	entry := cmp.Marks[0]
 	t.Logf("phase5: comparison %s/%s ai=%.1f teacher=%.1f mod=%.1f Δmt=%.1f Δma=%.1f",
 		entry.SubmissionID, entry.QuestionNo, entry.AI, entry.TeacherFinal, entry.Moderator,
@@ -433,7 +436,7 @@ func TestAnalyticsModerationFlow(t *testing.T) {
 
 	// Assert the original graded artifact exists before regrade.
 	gradedKey := fmt.Sprintf("%s/%s/graded.v1.json", testTenantID, appealSubID)
-	_, err = inf.objStore.Get(ctx, inf.bucket, gradedKey)
+	gradedBytesBefore, err := inf.objStore.Get(ctx, inf.bucket, gradedKey)
 	require.NoError(t, err, "original graded.v1.json must exist before regrade at %q", gradedKey)
 
 	fileResp := postJSON(t, apiURL, adminJWT, fmt.Sprintf("/v1/submissions/%s/appeals", appealSubID),
@@ -474,8 +477,19 @@ func TestAnalyticsModerationFlow(t *testing.T) {
 	t.Logf("phase5: regrade re-opened submission %s to %s", appealSubID, reopened)
 
 	// The original graded artifact must still exist (regrade never deletes it).
-	_, err = inf.objStore.Get(ctx, inf.bucket, gradedKey)
+	// However, note the KNOWN LIMITATION documented below.
+	gradedBytesAfter, err := inf.objStore.Get(ctx, inf.bucket, gradedKey)
 	require.NoError(t, err, "graded.v1.json must still exist after regrade at %q", gradedKey)
+
+	// KNOWN LIMITATION (follow-up): the grade worker writes graded.v1.json WITHOUT
+	// versioning, so a regrade OVERWRITES the original AI graded artifact rather than
+	// preserving it as graded.v{N}. The approved FinalGrade snapshot (final_grade row +
+	// graded.final.json) IS immutable, but the raw AI pass is not retained across a
+	// regrade. This assertion verifies the artifact key survives, NOT content-identity.
+	// Versioned graded artifacts are a deferred follow-up.
+	// (gradedBytesBefore and gradedBytesAfter intentionally not compared for content.)
+	_ = gradedBytesBefore  // Use the variable to satisfy linter.
+	_ = gradedBytesAfter   // Use the variable to satisfy linter.
 
 	// The appeal must now be under_review.
 	appealAfter, err := inf.pgStore.GetAppeal(ctx, testTenantID, appeal.ID)
