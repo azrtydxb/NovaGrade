@@ -98,11 +98,20 @@ func main() {
 	registerScannerKeys(resolver, os.Getenv("SCANNER_API_KEY"))
 
 	// ── Handlers ─────────────────────────────────────────────────────────────
+	deployMode := getenv("DEPLOY_MODE", "onprem")
+	objAdapter := &objStoreAdapter{store: objStore, bucket: bucket}
+
 	h := &api.Handlers{
 		Store:      st,
 		Bus:        bus,
-		Objects:    &objStoreAdapter{store: objStore, bucket: bucket},
-		DeployMode: getenv("DEPLOY_MODE", "onprem"),
+		Objects:    objAdapter,
+		DeployMode: deployMode,
+	}
+
+	rh := &api.ReviewHandlers{
+		Store:      st,
+		Objects:    objAdapter,
+		DeployMode: deployMode,
 	}
 
 	// ── Router ────────────────────────────────────────────────────────────────
@@ -117,6 +126,8 @@ func main() {
 		r.Get("/submissions", h.ListSubmissions)
 		r.Get("/submissions/{id}", h.GetSubmission)
 		r.Get("/submissions/{id}/result", h.GetResult)
+		r.Get("/submissions/{id}/review", rh.GetReview)
+		r.Patch("/submissions/{id}/questions/{qno}", rh.PatchQuestion)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
