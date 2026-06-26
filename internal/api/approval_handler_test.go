@@ -42,10 +42,15 @@ type ApprovalFakeStore struct {
 	reviews     []store.TeacherReview
 	// failAudit forces InsertAuditEvent to return an error.
 	failAudit bool
+	// preloadedFinalGrades holds existing FinalGrade rows for GetFinalGrade to return.
+	preloadedFinalGrades map[uuid.UUID]store.FinalGrade
 }
 
 func newApprovalFakeStore() *ApprovalFakeStore {
-	return &ApprovalFakeStore{submissions: make(map[uuid.UUID]store.Submission)}
+	return &ApprovalFakeStore{
+		submissions:          make(map[uuid.UUID]store.Submission),
+		preloadedFinalGrades: make(map[uuid.UUID]store.FinalGrade),
+	}
 }
 
 func (f *ApprovalFakeStore) GetSubmission(_ context.Context, id uuid.UUID) (store.Submission, error) {
@@ -56,6 +61,15 @@ func (f *ApprovalFakeStore) GetSubmission(_ context.Context, id uuid.UUID) (stor
 		return store.Submission{}, fmt.Errorf("GetSubmission %s: %w", id, store.ErrNotFound)
 	}
 	return sub, nil
+}
+
+func (f *ApprovalFakeStore) GetFinalGrade(_ context.Context, tenantID, submissionID uuid.UUID) (store.FinalGrade, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if fg, ok := f.preloadedFinalGrades[submissionID]; ok && fg.TenantID == tenantID {
+		return fg, nil
+	}
+	return store.FinalGrade{}, fmt.Errorf("GetFinalGrade %s: %w", submissionID, store.ErrNotFound)
 }
 
 func (f *ApprovalFakeStore) InsertAuditEvent(_ context.Context, p store.InsertAuditEventParams) (store.AuditEvent, error) {
@@ -828,6 +842,115 @@ func TestExport_CrossTenant(t *testing.T) {
 	tok := issueToken(t, principal)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/submissions/"+sub.ID.String()+"/export", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildApprovalRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, 0, fakeBus.publishedCount())
+}
+
+// TestApprove_Idempotent verifies that a second approve call on a submission that
+// already has a FinalGrade does NOT write a second FinalGrade or audit event, but
+// DOES re-publish the approve command and returns 200 with the existing FinalGrade.
+func TestApprove_Idempotent(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeApprovalStore := newApprovalFakeStore()
+	fakeObjects := NewFakeObjectStore()
+	fakeBus := &ApprovalFakeBus{}
+
+	// Submission still in teacher_review (orchestrator hasn't advanced it yet).
+	sub := fakeApprovalStore.seedSubmission(tenantID, contracts.StateTeacherReview)
+	makeGradedPaperForApproval(t, fakeObjects, tenantID, sub.ID)
+
+	// Pre-seed an existing FinalGrade (simulates a previous approve that completed
+	// DB writes but the client never received the 200).
+	existingFG := store.FinalGrade{
+		ID:           uuid.New(),
+		TenantID:     tenantID,
+		SubmissionID: sub.ID,
+		Total:        10,
+		MaxTotal:     15,
+		Score100:     66.7,
+		GradedKey:    fmt.Sprintf("%s/%s/graded.final.json", tenantID, sub.ID),
+		ApprovedBy:   "teacher-1",
+		ApprovedAt:   time.Now(),
+		CreatedAt:    time.Now(),
+	}
+	fakeApprovalStore.preloadedFinalGrades[sub.ID] = existingFG
+
+	h := &api.ApprovalHandlers{
+		Store:      fakeApprovalStore,
+		Objects:    fakeObjects,
+		Bus:        fakeBus,
+		DeployMode: "onprem",
+	}
+
+	principal := auth.Principal{
+		ID:       "teacher-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/submissions/"+sub.ID.String()+"/approve", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildApprovalRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	// No second audit event or FinalGrade must be written.
+	assert.Equal(t, 0, fakeApprovalStore.auditCount(), "idempotent path must not write a second audit event")
+	assert.Equal(t, 0, fakeApprovalStore.finalGradeCount(), "idempotent path must not write a second FinalGrade")
+
+	// The approve command MUST be re-published.
+	require.Equal(t, 1, fakeBus.publishedCount())
+	msg := fakeBus.latestMessage()
+	assert.Equal(t, "commands.q", msg.queue)
+	assert.Equal(t, contracts.StageApprove, msg.env.Stage)
+	assert.Equal(t, sub.ID.String(), msg.env.SubmissionID)
+
+	// The response must be the existing FinalGrade.
+	var fg store.FinalGrade
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &fg))
+	assert.Equal(t, existingFG.ID, fg.ID)
+	assert.Equal(t, existingFG.SubmissionID, fg.SubmissionID)
+}
+
+// TestPublish_CrossTenant verifies 404 for cross-tenant access to publish.
+func TestPublish_CrossTenant(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantA := uuid.New()
+	tenantB := uuid.New()
+	fakeApprovalStore := newApprovalFakeStore()
+	fakeObjects := NewFakeObjectStore()
+	fakeBus := &ApprovalFakeBus{}
+
+	sub := fakeApprovalStore.seedSubmission(tenantA, contracts.StateApproved)
+
+	h := &api.ApprovalHandlers{
+		Store:      fakeApprovalStore,
+		Objects:    fakeObjects,
+		Bus:        fakeBus,
+		DeployMode: "onprem",
+	}
+
+	principal := auth.Principal{
+		ID:       "teacher-b",
+		TenantID: tenantB.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/submissions/"+sub.ID.String()+"/publish", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	rec := httptest.NewRecorder()
 

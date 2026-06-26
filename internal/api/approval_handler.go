@@ -38,6 +38,7 @@ import (
 // ApprovalStore is the subset of store.Store required by ApprovalHandlers.
 type ApprovalStore interface {
 	GetSubmission(ctx context.Context, id uuid.UUID) (store.Submission, error)
+	GetFinalGrade(ctx context.Context, tenantID uuid.UUID, submissionID uuid.UUID) (store.FinalGrade, error)
 	InsertAuditEvent(ctx context.Context, p store.InsertAuditEventParams) (store.AuditEvent, error)
 	InsertFinalGrade(ctx context.Context, p store.InsertFinalGradeParams) (store.FinalGrade, error)
 	ListTeacherReviews(ctx context.Context, tenantID, submissionID uuid.UUID) ([]store.TeacherReview, error)
@@ -60,12 +61,13 @@ type ApprovalHandlers struct {
 // Steps (audit-first):
 //  1. Auth + RBAC + tenant isolation (404 on failure).
 //  2. 409 if sub.State != teacher_review.
-//  3. Load graded.v1.json + overlay teacher overrides → effective GradedPaper.
-//  4. Write effective paper to graded.final.json (object store).
-//  5. InsertAuditEvent(action="approve") — if this fails → 500, no further writes.
-//  6. InsertFinalGrade(snapshot with overrides applied, approved_by=principal).
-//  7. Publish Envelope{Stage: contracts.StageApprove} to commands.q.
-//  8. Return 200 + FinalGrade JSON.
+//  3. GetFinalGrade — if EXISTS, take idempotent path (re-publish only).
+//  4. Load graded.v1.json + overlay teacher overrides → effective GradedPaper (500 if missing).
+//  5. InsertAuditEvent(action="approve") — if this fails → 500, nothing else persisted/published.
+//  6. PutObject(graded.final.json) — the snapshot artifact.
+//  7. InsertFinalGrade(snapshot with overrides applied, approved_by=principal).
+//  8. Publish Envelope{Stage: contracts.StageApprove} to commands.q.
+//  9. Return 200 + FinalGrade JSON.
 func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 	p, ok := auth.PrincipalFromContext(r.Context())
 	if !ok {
@@ -83,11 +85,36 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load graded.v1.json.
+	// Idempotent path: if a FinalGrade already exists, re-publish and return it.
+	existingFG, err := h.Store.GetFinalGrade(r.Context(), tenantID, sub.ID)
+	if err == nil {
+		// FinalGrade already exists — idempotent retry: re-publish and return existing.
+		env := contracts.Envelope{
+			TenantID:      sub.TenantID.String(),
+			Principal:     p.ID,
+			SubmissionID:  sub.ID.String(),
+			Stage:         contracts.StageApprove,
+			CorrelationID: uuid.New().String(),
+		}
+		if err := h.Bus.Publish(r.Context(), "commands.q", env); err != nil {
+			http.Error(w, "bus error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(existingFG)
+		return
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "store error (get_final_grade)", http.StatusInternalServerError)
+		return
+	}
+
+	// Load graded.v1.json. A missing artifact while in teacher_review is a server-side
+	// error (the pipeline should have written it), not a client conflict.
 	objectKey := fmt.Sprintf("%s/%s/graded.v1.json", sub.TenantID, sub.ID)
 	data, err := h.Objects.GetObject(r.Context(), objectKey)
 	if err != nil {
-		http.Error(w, "graded artifact not available", http.StatusConflict)
+		http.Error(w, "graded artifact not available (server error)", http.StatusInternalServerError)
 		return
 	}
 
@@ -117,19 +144,7 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		effective.Score100 = (total / maxTotal) * 100
 	}
 
-	// Write graded.final.json to object store.
-	finalKey := fmt.Sprintf("%s/%s/graded.final.json", sub.TenantID, sub.ID)
-	finalData, err := json.Marshal(effective)
-	if err != nil {
-		http.Error(w, "failed to marshal final grade", http.StatusInternalServerError)
-		return
-	}
-	if err := h.Objects.PutObject(r.Context(), finalKey, finalData); err != nil {
-		http.Error(w, "storage error", http.StatusInternalServerError)
-		return
-	}
-
-	// Audit-first: write audit event before any DB write.
+	// Audit-first: write audit event before any artifact/DB write.
 	subID := sub.ID
 	_, err = h.Store.InsertAuditEvent(r.Context(), store.InsertAuditEventParams{
 		TenantID:   tenantID,
@@ -141,6 +156,18 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		http.Error(w, "store error (audit)", http.StatusInternalServerError)
+		return
+	}
+
+	// Write graded.final.json to object store (after audit succeeds).
+	finalKey := fmt.Sprintf("%s/%s/graded.final.json", sub.TenantID, sub.ID)
+	finalData, err := json.Marshal(effective)
+	if err != nil {
+		http.Error(w, "failed to marshal final grade", http.StatusInternalServerError)
+		return
+	}
+	if err := h.Objects.PutObject(r.Context(), finalKey, finalData); err != nil {
+		http.Error(w, "storage error", http.StatusInternalServerError)
 		return
 	}
 
