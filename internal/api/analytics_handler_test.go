@@ -499,14 +499,29 @@ func TestGetOutcomeMastery_OK(t *testing.T) {
 	assert.Equal(t, "ALPHA", alphaResp["code"])
 	assert.Equal(t, "BETA", betaResp["code"])
 
-	// Verify MeanPct for ALPHA is > 0 and < 1.
+	// Verify exact MeanPct for ALPHA.
+	// makeGradedPaperWithFlags produces: Q1=(7/10), Q2=(3/5)
+	// ALPHA maps to Q1 and Q2:
+	// - 3 submissions × 7/10 (Q1) = 21/30
+	// - 3 submissions × 3/5 (Q2) = 9/15
+	// - ALPHA MeanPct = (21 + 9) / (30 + 15) = 30/45 ≈ 0.6666...
 	alphaMeanPct, ok := alphaResp["mean_pct"].(float64)
 	require.True(t, ok, "mean_pct must be float64")
-	assert.Greater(t, alphaMeanPct, 0.0, "ALPHA mean_pct must be positive")
-	assert.Less(t, alphaMeanPct, 1.0, "ALPHA mean_pct must be < 1")
+	expectedAlphaMeanPct := 30.0 / 45.0 // 0.6666...
+	assert.InDelta(t, expectedAlphaMeanPct, alphaMeanPct, 1e-9, "ALPHA mean_pct must be exactly 30/45")
 
 	// Verify mastery field is valid.
 	assert.Contains(t, []string{"secure", "developing", "emerging"}, alphaResp["mastery"])
+
+	// Verify exact MeanPct for BETA.
+	// makeGradedPaperWithFlags produces: Q2=(3/5)
+	// BETA maps only to Q2:
+	// - 3 submissions × 3/5 (Q2) = 9/15
+	// - BETA MeanPct = 9/15 = 0.6
+	betaMeanPct, ok := betaResp["mean_pct"].(float64)
+	require.True(t, ok, "BETA mean_pct must be float64")
+	expectedBetaMeanPct := 9.0 / 15.0 // 0.6
+	assert.InDelta(t, expectedBetaMeanPct, betaMeanPct, 1e-9, "BETA mean_pct must be exactly 9/15")
 
 	// Gaps: sorted by MeanPct ascending (weakest first). BETA < ALPHA.
 	require.NotEmpty(t, resp.Gaps, "gaps must not be empty")
