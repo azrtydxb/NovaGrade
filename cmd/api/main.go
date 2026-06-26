@@ -132,6 +132,10 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	gph := &api.GuidePreviewHandlers{
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -155,6 +159,8 @@ func main() {
 		r.Get("/assessment-versions/{avid}/guides", gh.ListGuides)
 		r.Get("/assessment-versions/{avid}/guides/latest", gh.GetLatestGuide)
 		r.Post("/guides/{id}/lock", gh.LockGuide)
+		// Guide preview (stateless, no store, no provider)
+		r.Post("/guides/preview", gph.Preview)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
