@@ -26,6 +26,9 @@ type TranscribedPaper struct {
 // Optional field Section uses *string (nil == Python None).
 // GradeConfidence is constrained to [0,1] in the POC; validation left to caller.
 // Flags defaults to an empty slice (mirrors Python default_factory=list).
+// Feedback holds the AI-drafted per-question feedback text (added in Phase 2,
+// Task 5). It is separate from Justification (the grader's mark-scheme rationale)
+// and never affects awarded_marks or max_marks.
 type GradedQuestion struct {
 	QuestionNo      string   `json:"question_no"`
 	Section         *string  `json:"section"`
@@ -35,6 +38,7 @@ type GradedQuestion struct {
 	Justification   string   `json:"justification"`
 	GradeConfidence float64  `json:"grade_confidence"`
 	Flags           []string `json:"flags"`
+	Feedback        string   `json:"feedback"`
 }
 
 // GradedPaper mirrors the POC's GradedPaper Pydantic model.

@@ -22,9 +22,10 @@ const (
 	StageRender     string = "render"
 	StageTranscribe string = "transcribe"
 	StageGrade      string = "grade"
-	StageApprove    string = "approve"  // teacher_review → approved
-	StagePublish    string = "publish"  // approved → published
-	StageExport     string = "export"   // published → exported
+	StageApprove    string = "approve"   // teacher_review → approved
+	StagePublish    string = "publish"   // approved → published
+	StageExport     string = "export"    // published → exported
+	StageFeedback   string = "feedback"  // grade → feedback drafted
 )
 
 // Result event types — used in the Stage field to indicate a completed outcome.
@@ -34,4 +35,5 @@ const (
 	StageGradeResult      string = "grade.result"
 	StagePublishResult    string = "publish.result"
 	StageExportResult     string = "export.result"
+	StageFeedbackResult   string = "feedback.result"
 )
