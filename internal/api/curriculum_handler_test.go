@@ -263,6 +263,84 @@ func TestCurriculumCreateOutcome_NoPermission(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code, "teacher must not create outcomes")
 }
 
+// TestCurriculumCreateOutcome_DuplicateCode_409 verifies that posting the same
+// outcome code (under the same tenant) twice returns HTTP 409 Conflict on the
+// second request.
+func TestCurriculumCreateOutcome_DuplicateCode_409(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeStore := newCurriculumFakeStore()
+	h := &api.CurriculumHandlers{Store: fakeStore, DeployMode: "onprem"}
+
+	principal := auth.Principal{
+		ID:       "admin-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleSchoolAdmin},
+	}
+	tok := issueToken(t, principal)
+
+	body := `{"code":"MA1.1","description":"Add integers","subject":"math"}`
+
+	doPost := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/v1/outcomes", bytes.NewBufferString(body))
+		req.Header.Set("Authorization", "Bearer "+tok)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		buildCurriculumRouter(t, h, auth.NewAPIKeyResolver()).ServeHTTP(rec, req)
+		return rec
+	}
+
+	// First request must succeed.
+	rec1 := doPost()
+	require.Equal(t, http.StatusCreated, rec1.Code, "first outcome should succeed, body: %s", rec1.Body.String())
+
+	// Second identical code request must return 409 Conflict.
+	rec2 := doPost()
+	assert.Equal(t, http.StatusConflict, rec2.Code, "duplicate outcome code must return 409, body: %s", rec2.Body.String())
+}
+
+// TestCurriculumListOutcomes_TeacherReadRBAC verifies that a Teacher role
+// (which has ActionViewResults but NOT ActionEditTunables) can GET /v1/outcomes (200)
+// but cannot POST /v1/outcomes (404).
+func TestCurriculumListOutcomes_TeacherReadRBAC(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeStore := newCurriculumFakeStore()
+	h := &api.CurriculumHandlers{Store: fakeStore, DeployMode: "onprem"}
+
+	// Seed an outcome for the tenant.
+	fakeStore.seedOutcome(tenantID, "MA1.1")
+
+	principal := auth.Principal{
+		ID:       "teacher-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	// Test 1: Teacher CAN read outcomes via GET /v1/outcomes → 200
+	getReq := httptest.NewRequest(http.MethodGet, "/v1/outcomes", nil)
+	getReq.Header.Set("Authorization", "Bearer "+tok)
+	getRec := httptest.NewRecorder()
+	buildCurriculumRouter(t, h, auth.NewAPIKeyResolver()).ServeHTTP(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code, "teacher should be able to read outcomes with ViewResults")
+
+	var getResp []map[string]any
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &getResp))
+	require.Len(t, getResp, 1, "should return the seeded outcome")
+
+	// Test 2: Teacher CANNOT create outcomes via POST /v1/outcomes → 404
+	postBody := `{"code":"MA2.1","description":"Different","subject":"math"}`
+	postReq := httptest.NewRequest(http.MethodPost, "/v1/outcomes", bytes.NewBufferString(postBody))
+	postReq.Header.Set("Authorization", "Bearer "+tok)
+	postReq.Header.Set("Content-Type", "application/json")
+	postRec := httptest.NewRecorder()
+	buildCurriculumRouter(t, h, auth.NewAPIKeyResolver()).ServeHTTP(postRec, postReq)
+	assert.Equal(t, http.StatusNotFound, postRec.Code, "teacher lacks EditTunables and must not create outcomes")
+}
+
 // TestCurriculumMapQuestion_Created verifies mapping a question to an outcome
 // (both owned by the caller's tenant) → 201.
 func TestCurriculumMapQuestion_Created(t *testing.T) {

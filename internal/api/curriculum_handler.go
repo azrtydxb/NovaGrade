@@ -10,9 +10,11 @@ package api
 //   GET  /v1/assessment-versions/{avid}/question-outcomes     — list mappings for AV
 //
 // RBAC:
-//   All four endpoints require ActionEditTunables.
-//   Roles that hold this action: operator, group_admin, school_admin.
-//   Teacher, reviewer and scanner are denied → 404 (404-not-403 to avoid
+//   Write endpoints (POST /v1/outcomes, POST .../question-outcomes) require ActionEditTunables.
+//   Read endpoints (GET /v1/outcomes, GET .../question-outcomes) require ActionViewResults.
+//   Roles that hold EditTunables: operator, group_admin, school_admin.
+//   Roles that hold ViewResults: operator, group_admin, school_admin, teacher, reviewer.
+//   Users lacking the required action are denied → 404 (404-not-403 to avoid
 //   role/tenant enumeration, consistent with the rest of the API).
 //
 // Tenant-scoping approach:
@@ -55,11 +57,10 @@ type CurriculumHandlers struct {
 	DeployMode string // "saas" or "onprem"
 }
 
-// curriculumAuthz extracts and validates the principal and checks
-// ActionEditTunables. On denial it writes an HTTP response and returns
-// (zero, false). Auth is purely principal-scoped: we only need the caller's
-// own tenant.
-func (h *CurriculumHandlers) curriculumAuthz(w http.ResponseWriter, r *http.Request) (auth.Principal, uuid.UUID, bool) {
+// curriculumAuthz extracts and validates the principal and checks the given action.
+// On denial it writes an HTTP response and returns (zero, false). Auth is purely
+// principal-scoped: we only need the caller's own tenant.
+func (h *CurriculumHandlers) curriculumAuthz(w http.ResponseWriter, r *http.Request, action domain.Action) (auth.Principal, uuid.UUID, bool) {
 	p, ok := auth.PrincipalFromContext(r.Context())
 	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -70,7 +71,7 @@ func (h *CurriculumHandlers) curriculumAuthz(w http.ResponseWriter, r *http.Requ
 		ResourceTenantID: p.TenantID,
 		DeployMode:       h.DeployMode,
 	}
-	if !domain.Can(p.Roles, domain.ActionEditTunables, rctx) {
+	if !domain.Can(p.Roles, action, rctx) {
 		// 404, not 403 — prevents role/tenant enumeration.
 		http.Error(w, "not found", http.StatusNotFound)
 		return auth.Principal{}, uuid.UUID{}, false
@@ -142,7 +143,7 @@ func toQuestionOutcomeResponse(q store.QuestionOutcome) questionOutcomeResponse 
 
 // CreateOutcome handles POST /v1/outcomes.
 func (h *CurriculumHandlers) CreateOutcome(w http.ResponseWriter, r *http.Request) {
-	_, tenantID, ok := h.curriculumAuthz(w, r)
+	_, tenantID, ok := h.curriculumAuthz(w, r, domain.ActionEditTunables)
 	if !ok {
 		return
 	}
@@ -179,7 +180,7 @@ func (h *CurriculumHandlers) CreateOutcome(w http.ResponseWriter, r *http.Reques
 
 // ListOutcomes handles GET /v1/outcomes.
 func (h *CurriculumHandlers) ListOutcomes(w http.ResponseWriter, r *http.Request) {
-	_, tenantID, ok := h.curriculumAuthz(w, r)
+	_, tenantID, ok := h.curriculumAuthz(w, r, domain.ActionViewResults)
 	if !ok {
 		return
 	}
@@ -201,7 +202,7 @@ func (h *CurriculumHandlers) ListOutcomes(w http.ResponseWriter, r *http.Request
 
 // MapQuestionOutcome handles POST /v1/assessment-versions/{avid}/question-outcomes.
 func (h *CurriculumHandlers) MapQuestionOutcome(w http.ResponseWriter, r *http.Request) {
-	_, tenantID, ok := h.curriculumAuthz(w, r)
+	_, tenantID, ok := h.curriculumAuthz(w, r, domain.ActionEditTunables)
 	if !ok {
 		return
 	}
@@ -258,7 +259,7 @@ func (h *CurriculumHandlers) MapQuestionOutcome(w http.ResponseWriter, r *http.R
 
 // ListQuestionOutcomes handles GET /v1/assessment-versions/{avid}/question-outcomes.
 func (h *CurriculumHandlers) ListQuestionOutcomes(w http.ResponseWriter, r *http.Request) {
-	_, tenantID, ok := h.curriculumAuthz(w, r)
+	_, tenantID, ok := h.curriculumAuthz(w, r, domain.ActionViewResults)
 	if !ok {
 		return
 	}

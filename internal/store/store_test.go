@@ -415,7 +415,7 @@ func TestCurriculum_DuplicateCode_UniqueViolation(t *testing.T) {
 		Subject:     "math",
 	})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "duplicate")
+	require.ErrorIs(t, err, ErrDuplicate)
 }
 
 func TestCurriculum_MapQuestion(t *testing.T) {
