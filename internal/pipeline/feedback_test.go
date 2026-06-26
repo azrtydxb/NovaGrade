@@ -202,3 +202,120 @@ func TestDraftFeedback_PerQuestionIsolation(t *testing.T) {
 		}
 	}
 }
+
+// TestDraftFeedback_SkipsAlreadyFedQuestions verifies idempotency: questions that
+// already have non-empty Feedback are skipped (the provider is never called for them),
+// while questions with empty Feedback receive new feedback. All marks are unchanged.
+func TestDraftFeedback_SkipsAlreadyFedQuestions(t *testing.T) {
+	questions := []contracts.GradedQuestion{
+		{
+			QuestionNo:    "1",
+			MaxMarks:      5,
+			AwardedMarks:  3,
+			StudentAnswer: "Initial answer",
+			Justification: "Partially correct",
+			Flags:         []string{},
+			Feedback:      "pre-existing feedback",
+		},
+		{
+			QuestionNo:    "2",
+			MaxMarks:      10,
+			AwardedMarks:  8,
+			StudentAnswer: "Second answer",
+			Justification: "Correct method",
+			Flags:         []string{},
+			Feedback:      "",
+		},
+	}
+	input := buildTestGradedPaper(questions)
+
+	// Track which questions the provider is called for.
+	callTracker := map[string]bool{}
+	prov := &callTrackingProvider{
+		feedbackFakeProvider: &feedbackFakeProvider{
+			responses: map[string]string{
+				"1": "Should not be called for Q1",
+				"2": "New feedback for question 2",
+			},
+			errs: map[string]error{},
+		},
+		callTracker: callTracker,
+	}
+
+	result, err := pipeline.DraftFeedback(context.Background(), prov, "test-model", input)
+	if err != nil {
+		t.Fatalf("DraftFeedback returned unexpected error: %v", err)
+	}
+
+	if len(result.Questions) != 2 {
+		t.Fatalf("question count changed: got %d, want 2", len(result.Questions))
+	}
+
+	// Q1 (already had feedback) should NOT have been called on the provider.
+	if callTracker["1"] {
+		t.Errorf("q[0] (question_no=1) provider should NOT have been called (already had feedback), but was")
+	}
+
+	// Q1.Feedback must be unchanged.
+	if result.Questions[0].Feedback != "pre-existing feedback" {
+		t.Errorf("q[0] (question_no=1) Feedback was changed: got %q, want %q", result.Questions[0].Feedback, "pre-existing feedback")
+	}
+
+	// Q2 (had empty feedback) should HAVE been called on the provider.
+	if !callTracker["2"] {
+		t.Errorf("q[1] (question_no=2) provider should have been called (had empty feedback), but was not")
+	}
+
+	// Q2 must have received new non-empty feedback.
+	if result.Questions[1].Feedback == "" {
+		t.Errorf("q[1] (question_no=2) got empty Feedback, want non-empty")
+	}
+	if result.Questions[1].Feedback != "New feedback for question 2" {
+		t.Errorf("q[1] (question_no=2) Feedback mismatch: got %q, want %q", result.Questions[1].Feedback, "New feedback for question 2")
+	}
+
+	// All marks must be unchanged.
+	for i, q := range result.Questions {
+		orig := input.Questions[i]
+		if q.AwardedMarks != orig.AwardedMarks {
+			t.Errorf("q[%d] awarded_marks changed: got %v, want %v", i, q.AwardedMarks, orig.AwardedMarks)
+		}
+		if q.MaxMarks != orig.MaxMarks {
+			t.Errorf("q[%d] max_marks changed: got %v, want %v", i, q.MaxMarks, orig.MaxMarks)
+		}
+	}
+
+	// Paper-level marks are unchanged.
+	if result.Total != input.Total {
+		t.Errorf("Total changed: got %v, want %v", result.Total, input.Total)
+	}
+	if result.MaxTotal != input.MaxTotal {
+		t.Errorf("MaxTotal changed: got %v, want %v", result.MaxTotal, input.MaxTotal)
+	}
+	if result.Score100 != input.Score100 {
+		t.Errorf("Score100 changed: got %v, want %v", result.Score100, input.Score100)
+	}
+}
+
+// callTrackingProvider wraps feedbackFakeProvider to track which questions
+// the provider's Complete method was called for.
+type callTrackingProvider struct {
+	*feedbackFakeProvider
+	callTracker map[string]bool
+}
+
+func (c *callTrackingProvider) Complete(ctx context.Context, req providers.CompletionReq) (providers.CompletionResp, error) {
+	// Extract question number from content to track the call.
+	content := ""
+	if len(req.Messages) > 0 {
+		content = req.Messages[len(req.Messages)-1].Content
+	}
+	for qno := range c.feedbackFakeProvider.responses {
+		if strings.Contains(content, "Question: "+qno) {
+			c.callTracker[qno] = true
+			break
+		}
+	}
+	// Delegate to the underlying fake provider.
+	return c.feedbackFakeProvider.Complete(ctx, req)
+}
