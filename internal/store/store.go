@@ -423,7 +423,7 @@ func (s *Store) InsertFinalGrade(ctx context.Context, p InsertFinalGradeParams) 
 		Score100:     p.Score100,
 		GradedKey:    p.GradedKey,
 		ApprovedBy:   p.ApprovedBy,
-		ApprovedAt:   timeToPgtypeTimestamptz(p.ApprovedAt),
+		ApprovedAt:   p.ApprovedAt,
 	})
 	if err != nil {
 		return FinalGrade{}, fmt.Errorf("store: InsertFinalGrade: %w", err)
@@ -431,8 +431,9 @@ func (s *Store) InsertFinalGrade(ctx context.Context, p InsertFinalGradeParams) 
 	return finalGradeFromInsertRow(row), nil
 }
 
-// GetFinalGrade retrieves the most recent final_grade row for the given
-// submission within a tenant. Returns ErrNotFound if no row exists.
+// GetFinalGrade retrieves the final_grade row for the submission (at most one
+// exists per tenant+submission); returns ErrNotFound if the submission has not
+// been approved.
 func (s *Store) GetFinalGrade(ctx context.Context, tenantID uuid.UUID, submissionID uuid.UUID) (FinalGrade, error) {
 	row, err := s.queries.GetFinalGrade(ctx, db.GetFinalGradeParams{
 		TenantID:     tenantID,
@@ -574,7 +575,7 @@ func finalGradeFromInsertRow(r db.InsertFinalGradeRow) FinalGrade {
 		Score100:     r.Score100,
 		GradedKey:    r.GradedKey,
 		ApprovedBy:   r.ApprovedBy,
-		ApprovedAt:   r.ApprovedAt.Time,
+		ApprovedAt:   r.ApprovedAt,
 		CreatedAt:    r.CreatedAt.Time,
 	}
 }
@@ -590,12 +591,7 @@ func finalGradeFromGetRow(r db.GetFinalGradeRow) FinalGrade {
 		Score100:     r.Score100,
 		GradedKey:    r.GradedKey,
 		ApprovedBy:   r.ApprovedBy,
-		ApprovedAt:   r.ApprovedAt.Time,
+		ApprovedAt:   r.ApprovedAt,
 		CreatedAt:    r.CreatedAt.Time,
 	}
-}
-
-// timeToPgtypeTimestamptz converts a time.Time to pgtype.Timestamptz for sqlc parameters.
-func timeToPgtypeTimestamptz(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
 }

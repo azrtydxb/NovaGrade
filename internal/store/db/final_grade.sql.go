@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -37,7 +38,7 @@ type GetFinalGradeRow struct {
 	Score100     float64
 	GradedKey    string
 	ApprovedBy   string
-	ApprovedAt   pgtype.Timestamptz
+	ApprovedAt   time.Time
 	CreatedAt    pgtype.Timestamptz
 }
 
@@ -82,7 +83,7 @@ type InsertFinalGradeParams struct {
 	Score100     float64
 	GradedKey    string
 	ApprovedBy   string
-	ApprovedAt   pgtype.Timestamptz
+	ApprovedAt   time.Time
 }
 
 type InsertFinalGradeRow struct {
@@ -94,7 +95,7 @@ type InsertFinalGradeRow struct {
 	Score100     float64
 	GradedKey    string
 	ApprovedBy   string
-	ApprovedAt   pgtype.Timestamptz
+	ApprovedAt   time.Time
 	CreatedAt    pgtype.Timestamptz
 }
 

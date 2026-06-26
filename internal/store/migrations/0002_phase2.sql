@@ -21,7 +21,7 @@ ALTER TABLE final_grade
     ADD COLUMN IF NOT EXISTS score_100    double precision NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS graded_key   text             NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS approved_by  text             NOT NULL DEFAULT '',
-    ADD COLUMN IF NOT EXISTS approved_at  timestamptz;
+    ADD COLUMN IF NOT EXISTS approved_at  timestamptz NOT NULL DEFAULT now();
 
 ALTER TABLE final_grade
     ADD CONSTRAINT final_grade_tenant_submission_unique UNIQUE (tenant_id, submission_id);
