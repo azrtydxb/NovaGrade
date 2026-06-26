@@ -52,7 +52,7 @@ func (f *CurriculumFakeStore) CreateOutcome(_ context.Context, p store.CreateOut
 	defer f.mu.Unlock()
 	for _, o := range f.outcomes {
 		if o.TenantID == p.TenantID && o.Code == p.Code {
-			return store.CurriculumOutcome{}, fmt.Errorf("duplicate outcome code %q", p.Code)
+			return store.CurriculumOutcome{}, fmt.Errorf("duplicate outcome code %q: %w", p.Code, store.ErrDuplicate)
 		}
 	}
 	o := store.CurriculumOutcome{
@@ -92,6 +92,12 @@ func (f *CurriculumFakeStore) GetOutcome(_ context.Context, tenantID, id uuid.UU
 func (f *CurriculumFakeStore) MapQuestionOutcome(_ context.Context, p store.MapQuestionOutcomeParams) (store.QuestionOutcome, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	for _, m := range f.mappings {
+		if m.TenantID == p.TenantID && m.AssessmentVersionID == p.AssessmentVersionID &&
+			m.QuestionNo == p.QuestionNo && m.OutcomeID == p.OutcomeID {
+			return store.QuestionOutcome{}, fmt.Errorf("duplicate mapping for question %q: %w", p.QuestionNo, store.ErrDuplicate)
+		}
+	}
 	q := store.QuestionOutcome{
 		ID:                  uuid.New(),
 		TenantID:            p.TenantID,
@@ -440,4 +446,46 @@ func TestCurriculumMapQuestion_CrossTenantAVID(t *testing.T) {
 	buildCurriculumRouter(t, h, auth.NewAPIKeyResolver()).ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code, "must not map against another tenant's AVID")
+}
+
+// TestCurriculumMapQuestion_DuplicateMapping_409 verifies that posting the same
+// (question_no, outcome_id) pair for the same assessment version twice returns
+// HTTP 409 Conflict on the second request.
+func TestCurriculumMapQuestion_DuplicateMapping_409(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeStore := newCurriculumFakeStore()
+	h := &api.CurriculumHandlers{Store: fakeStore, DeployMode: "onprem"}
+
+	outcome := fakeStore.seedOutcome(tenantID, "MA2.1")
+	avid := fakeStore.seedAV(tenantID)
+
+	principal := auth.Principal{
+		ID:       "admin-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleSchoolAdmin},
+	}
+	tok := issueToken(t, principal)
+
+	body := fmt.Sprintf(`{"question_no":"3c","outcome_id":%q}`, outcome.ID.String())
+
+	doPost := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost,
+			"/v1/assessment-versions/"+avid.String()+"/question-outcomes",
+			bytes.NewBufferString(body))
+		req.Header.Set("Authorization", "Bearer "+tok)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		buildCurriculumRouter(t, h, auth.NewAPIKeyResolver()).ServeHTTP(rec, req)
+		return rec
+	}
+
+	// First request must succeed.
+	rec1 := doPost()
+	require.Equal(t, http.StatusCreated, rec1.Code, "first mapping should succeed, body: %s", rec1.Body.String())
+
+	// Second identical request must return 409 Conflict.
+	rec2 := doPost()
+	assert.Equal(t, http.StatusConflict, rec2.Code, "duplicate mapping must return 409, body: %s", rec2.Body.String())
 }

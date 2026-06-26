@@ -164,6 +164,10 @@ func (h *CurriculumHandlers) CreateOutcome(w http.ResponseWriter, r *http.Reques
 		Subject:     req.Subject,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrDuplicate) {
+			http.Error(w, "outcome code already exists for this tenant", http.StatusConflict)
+			return
+		}
 		http.Error(w, "store error", http.StatusInternalServerError)
 		return
 	}

@@ -8,10 +8,11 @@ package store
 //   - All operations are tenant-scoped: every query filters on tenant_id and
 //     GetOutcome returns ErrNotFound rather than a cross-tenant row.
 //
-//   - Unique violations (Postgres SQLSTATE 23505) are surfaced as a wrapped
-//     error so callers can see the constraint that was hit. No special sentinel
-//     is used — duplicate codes and duplicate question→outcome mappings are
-//     simply rejected by the database UNIQUE constraints.
+//   - Unique violations (Postgres SQLSTATE 23505) are surfaced as ErrDuplicate
+//     (via fmt.Errorf wrapping) so callers can use errors.Is(err, store.ErrDuplicate)
+//     to distinguish duplicates from other store errors. Both CreateOutcome
+//     (duplicate outcome code per tenant) and MapQuestionOutcome (duplicate
+//     question→outcome mapping) use this sentinel.
 
 import (
 	"context"
@@ -89,7 +90,7 @@ func (s *Store) CreateOutcome(ctx context.Context, p CreateOutcomeParams) (Curri
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return CurriculumOutcome{}, fmt.Errorf("store: CreateOutcome: duplicate outcome code %q: %w", p.Code, err)
+			return CurriculumOutcome{}, fmt.Errorf("store: CreateOutcome: duplicate outcome code %q: %w", p.Code, ErrDuplicate)
 		}
 		return CurriculumOutcome{}, fmt.Errorf("store: CreateOutcome: %w", err)
 	}
