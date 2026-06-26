@@ -183,6 +183,10 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		Stage:         contracts.StageApprove,
 		CorrelationID: uuid.New().String(),
 	}
+	// A publish failure here returns 500 after the DB writes have already succeeded.
+	// Because InsertFinalGrade is an UPSERT, a client retry is safe: re-approve
+	// recomputes the same values and the orchestrator reconciles via the re-sent
+	// StageApprove command.
 	if err := h.Bus.Publish(r.Context(), "commands.q", env); err != nil {
 		http.Error(w, "bus error", http.StatusInternalServerError)
 		return

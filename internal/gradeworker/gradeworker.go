@@ -324,7 +324,11 @@ func archivePriorGradedArtifact(ctx context.Context, obj objStorer, bucket, tena
 		return fmt.Errorf("read prior graded artifact %q: %w", priorKey, err)
 	}
 
-	// Find the next free archive index.
+	// Find the next free archive index. The check-then-put is non-atomic, but
+	// concurrent regraders for the same submission are prevented by the state
+	// machine (EventRegrade requires the submission to be in a specific state,
+	// serializing regrades). If grading ever becomes concurrent per submission,
+	// switch to a conditional PUT (If-None-Match: *) to make this atomic.
 	var archiveIndex int
 	for archiveIndex = 1; ; archiveIndex++ {
 		archiveKey := fmt.Sprintf("%s/%s/graded.archive.%d.json", tenantID, submissionID, archiveIndex)
