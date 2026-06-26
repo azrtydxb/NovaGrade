@@ -13,7 +13,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,11 +31,8 @@ import (
 	"github.com/azrtydxb/novagrade/internal/api"
 	"github.com/azrtydxb/novagrade/internal/auth"
 	"github.com/azrtydxb/novagrade/internal/domain"
+	"github.com/azrtydxb/novagrade/internal/gradeworker"
 	"github.com/azrtydxb/novagrade/internal/orchestrator"
-	pipelineGrade "github.com/azrtydxb/novagrade/internal/pipeline/grade"
-	"github.com/azrtydxb/novagrade/internal/providers"
-	"github.com/azrtydxb/novagrade/internal/queue"
-	"github.com/azrtydxb/novagrade/internal/store"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 )
 
@@ -163,127 +159,6 @@ func newMarkingGuideAIServer(t *testing.T, gradeCallCounter *int64) *httptest.Se
 	}))
 	t.Cleanup(srv.Close)
 	return srv
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// gradeHandlerWithStore is an in-process grade worker that uses the DB store
-// to load guides — mirroring the Part A wiring in cmd/grade/main.go.
-// This is used by TestMarkingGuideFlow so the REAL guide-loading + locking
-// logic runs in the test without launching a separate process.
-// ─────────────────────────────────────────────────────────────────────────────
-func gradeHandlerWithStore(
-	ctx context.Context,
-	env contracts.Envelope,
-	obj *store.ObjStore,
-	st *store.Store,
-	bus *queue.Bus,
-	prov providers.AIProvider,
-	bucket, gradeModel string,
-) error {
-	// 1. Load transcript.
-	transcriptKey := fmt.Sprintf("%s/%s/transcript.v1.json", env.TenantID, env.SubmissionID)
-	tData, err := obj.Get(ctx, bucket, transcriptKey)
-	if err != nil {
-		return fmt.Errorf("grade[mg-test]: get transcript: %w", err)
-	}
-	var paper contracts.TranscribedPaper
-	if err := json.Unmarshal(tData, &paper); err != nil {
-		return fmt.Errorf("grade[mg-test]: parse transcript: %w", err)
-	}
-
-	// 2. Build mark scheme — mirrors cmd/grade/main.go handleEnvelope Part A logic.
-	llmJudge := pipelineGrade.NewLLMJudge(prov, gradeModel)
-	var scheme pipelineGrade.MarkScheme = llmJudge
-	var guideLoaded bool
-
-	if st != nil {
-		submissionUID, parseErr := uuid.Parse(env.SubmissionID)
-		if parseErr == nil {
-			sub, subErr := st.GetSubmission(ctx, submissionUID)
-			if subErr != nil && !errors.Is(subErr, store.ErrNotFound) {
-				return fmt.Errorf("grade[mg-test]: get submission %s: %w", env.SubmissionID, subErr)
-			}
-			if subErr == nil && sub.AssessmentVersionID != nil {
-				avid := *sub.AssessmentVersionID
-				tenantUID, tenantParseErr := uuid.Parse(env.TenantID)
-				if tenantParseErr == nil {
-					mg, guideErr := st.GetLatestGuide(ctx, tenantUID, avid)
-					if guideErr == nil {
-						g, guideParseErr := pipelineGrade.LoadGuideFromJSON(mg.Content)
-						if guideParseErr == nil {
-							scheme = pipelineGrade.NewGuideMarkScheme(g, llmJudge, prov, gradeModel)
-							guideLoaded = true
-							// Lock-on-grading-start (idempotent — preserves locked_at if already locked).
-							_ = st.LockGuide(ctx, tenantUID, mg.ID)
-						}
-					} else if !errors.Is(guideErr, store.ErrNotFound) {
-						return fmt.Errorf("grade[mg-test]: GetLatestGuide: %w", guideErr)
-					}
-				}
-			}
-		}
-	}
-
-	// 2b. Fallback: obj-store guide (not expected in this test but kept for completeness).
-	if !guideLoaded {
-		guideKey := fmt.Sprintf("%s/%s/guide.v1.json", env.TenantID, env.SubmissionID)
-		guideData, guideErr := obj.Get(ctx, bucket, guideKey)
-		if guideErr == nil {
-			g, parseErr := pipelineGrade.LoadGuideFromJSON(guideData)
-			if parseErr == nil {
-				scheme = pipelineGrade.NewGuideMarkScheme(g, llmJudge, prov, gradeModel)
-				guideLoaded = true
-			}
-		} else if !errors.Is(guideErr, store.ErrNotFound) {
-			return fmt.Errorf("grade[mg-test]: get obj-store guide: %w", guideErr)
-		}
-	}
-	_ = guideLoaded
-
-	// 3. Grade.
-	gradedPaper, err := pipelineGrade.GradePaper(ctx, scheme, paper)
-	if err != nil {
-		return fmt.Errorf("grade[mg-test]: grade paper: %w", err)
-	}
-
-	// 4. Persist graded.v1.json.
-	gradedKey := fmt.Sprintf("%s/%s/graded.v1.json", env.TenantID, env.SubmissionID)
-	gJSON, _ := json.Marshal(gradedPaper)
-	if err := obj.Put(ctx, bucket, gradedKey, gJSON, "application/json"); err != nil {
-		return fmt.Errorf("grade[mg-test]: upload graded: %w", err)
-	}
-
-	// 5. Persist grade-result.json summary.
-	type summary struct {
-		QuestionCount int     `json:"question_count"`
-		TotalMarks    float64 `json:"total_marks"`
-		MaxMarks      float64 `json:"max_marks"`
-		Score100      float64 `json:"score_100"`
-		GradedKey     string  `json:"graded_key"`
-	}
-	summaryJSON, _ := json.Marshal(summary{
-		QuestionCount: len(gradedPaper.Questions),
-		TotalMarks:    gradedPaper.Total,
-		MaxMarks:      gradedPaper.MaxTotal,
-		Score100:      gradedPaper.Score100,
-		GradedKey:     gradedKey,
-	})
-	summaryKey := fmt.Sprintf("%s/%s/grade-result.json", env.TenantID, env.SubmissionID)
-	if err := obj.Put(ctx, bucket, summaryKey, summaryJSON, "application/json"); err != nil {
-		return fmt.Errorf("grade[mg-test]: upload summary: %w", err)
-	}
-
-	// 6. Publish grade.result.
-	return bus.Publish(ctx, "results.q", contracts.Envelope{
-		TenantID:      env.TenantID,
-		Principal:     env.Principal,
-		SubmissionID:  env.SubmissionID,
-		BatchID:       env.BatchID,
-		Stage:         contracts.StageGradeResult,
-		Attempt:       env.Attempt,
-		CorrelationID: env.CorrelationID,
-		PayloadRef:    summaryKey,
-	})
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -494,10 +369,19 @@ func TestMarkingGuideFlow(t *testing.T) {
 		return transcribeHandler(workerCtx, env, inf.objStore, transcribeBus, aiProv, inf.bucket, false)
 	}), "start transcribe consumer")
 
-	// Grade worker uses DB store — the real Part A guide-loading + locking logic.
+	// Grade worker uses the REAL gradeworker.HandleEnvelope with DB store —
+	// the same code path as cmd/grade/main.go.
 	gradeBus := mustConnectBus(t, inf.amqpURL, 0)
+	gradeDeps := gradeworker.Deps{
+		ObjStore:   inf.objStore,
+		Store:      inf.pgStore,
+		Provider:   aiProv,
+		Bus:        gradeBus,
+		Bucket:     inf.bucket,
+		GradeModel: "grade-model",
+	}
 	require.NoError(t, gradeBus.Consume(workerCtx, "grade.q", func(env contracts.Envelope) error {
-		return gradeHandlerWithStore(workerCtx, env, inf.objStore, inf.pgStore, gradeBus, aiProv, inf.bucket, "grade-model")
+		return gradeworker.HandleEnvelope(workerCtx, gradeDeps, env)
 	}), "start grade consumer")
 
 	// ── Step 5: Submit PDF + patch assessment_version_id ────────────────────
