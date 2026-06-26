@@ -8,8 +8,14 @@ package gradeworker
 //                 with the envelope TenantID.
 // Fix 3 coverage: selectLockedOrLatestGuide prefers the highest locked version
 //                 over the latest unlocked version.
+// Task-1 coverage: archivePriorGradedArtifact archives graded.v1.json before
+//                  a regrade overwrites it (graded.archive.N.json scheme).
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +25,61 @@ import (
 
 	"github.com/azrtydxb/novagrade/internal/store"
 )
+
+// ─────────────────────────────────────────────────────────────────────────────
+// fakeObjStore — in-memory objStorer for archive tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+// fakeObjStore is a thread-safe in-memory implementation of objStorer.
+// Absent keys return store.ErrNotFound, mirroring the real ObjStore semantics.
+type fakeObjStore struct {
+	mu      sync.RWMutex
+	objects map[string][]byte // bucket+"/"+key → data
+}
+
+func newFakeObjStore() *fakeObjStore {
+	return &fakeObjStore{objects: make(map[string][]byte)}
+}
+
+func (f *fakeObjStore) storageKey(bucket, key string) string {
+	return bucket + "/" + key
+}
+
+func (f *fakeObjStore) Get(_ context.Context, bucket, key string) ([]byte, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	data, ok := f.objects[f.storageKey(bucket, key)]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s/%s", store.ErrNotFound, bucket, key)
+	}
+	// Return a copy so callers cannot mutate internal state.
+	out := make([]byte, len(data))
+	copy(out, data)
+	return out, nil
+}
+
+func (f *fakeObjStore) Put(_ context.Context, bucket, key string, data []byte, _ string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	stored := make([]byte, len(data))
+	copy(stored, data)
+	f.objects[f.storageKey(bucket, key)] = stored
+	return nil
+}
+
+// keys returns all stored keys under a bucket prefix (for assertions).
+func (f *fakeObjStore) keys(bucket string) []string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	prefix := bucket + "/"
+	var result []string
+	for k := range f.objects {
+		if len(k) > len(prefix) && k[:len(prefix)] == prefix {
+			result = append(result, k[len(prefix):])
+		}
+	}
+	return result
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fake store for selectLockedOrLatestGuide tests
@@ -189,4 +250,113 @@ func TestTenantConsistencyAssert_MismatchedTenants(t *testing.T) {
 	// Must trigger the mismatch path.
 	assert.NotEqual(t, sub.TenantID.String(), envTenantID,
 		"mismatched tenants: assertion must detect mismatch")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task-1 — archivePriorGradedArtifact: archive-before-overwrite
+// ─────────────────────────────────────────────────────────────────────────────
+
+const (
+	testBucket     = "test-bucket"
+	testTenantID   = "tenant-abc"
+	testSubmission = "sub-001"
+)
+
+func gradedKey() string {
+	return fmt.Sprintf("%s/%s/graded.v1.json", testTenantID, testSubmission)
+}
+
+func archiveKey(n int) string {
+	return fmt.Sprintf("%s/%s/graded.archive.%d.json", testTenantID, testSubmission, n)
+}
+
+// TestHandleEnvelope_ArchivesPriorGradedArtifact verifies the full archive
+// contract:
+//
+//  1. First grade: graded.v1.json written, NO graded.archive.* key exists.
+//  2. Regrade: graded.v1.json updated to new content AND graded.archive.1.json
+//     holds the original content.
+func TestHandleEnvelope_ArchivesPriorGradedArtifact(t *testing.T) {
+	ctx := context.Background()
+	obj := newFakeObjStore()
+
+	resultA := []byte(`{"result":"A"}`)
+	resultB := []byte(`{"result":"B"}`)
+
+	// ── Scenario 1: first grade — graded.v1.json does not exist yet ──────────
+	err := archivePriorGradedArtifact(ctx, obj, testBucket, testTenantID, testSubmission)
+	require.NoError(t, err, "first grade: archivePriorGradedArtifact must be a no-op when no prior artifact exists")
+
+	// Simulate writing graded.v1.json (result A) — as HandleEnvelope does after archiving.
+	require.NoError(t, obj.Put(ctx, testBucket, gradedKey(), resultA, "application/json"))
+
+	// Assert: graded.v1.json = A, no archive key.
+	got, err := obj.Get(ctx, testBucket, gradedKey())
+	require.NoError(t, err)
+	assert.Equal(t, resultA, got, "first grade: graded.v1.json must hold result A")
+
+	_, archiveErr := obj.Get(ctx, testBucket, archiveKey(1))
+	assert.True(t, errors.Is(archiveErr, store.ErrNotFound),
+		"first grade: graded.archive.1.json must NOT exist after the first grade")
+
+	// ── Scenario 2: regrade — graded.v1.json exists, archive it ─────────────
+	err = archivePriorGradedArtifact(ctx, obj, testBucket, testTenantID, testSubmission)
+	require.NoError(t, err, "regrade: archivePriorGradedArtifact must succeed when prior artifact exists")
+
+	// Simulate writing graded.v1.json (result B) — the new grade.
+	require.NoError(t, obj.Put(ctx, testBucket, gradedKey(), resultB, "application/json"))
+
+	// Assert: graded.v1.json = B (new grade).
+	got, err = obj.Get(ctx, testBucket, gradedKey())
+	require.NoError(t, err)
+	assert.Equal(t, resultB, got, "regrade: graded.v1.json must hold the new result B")
+
+	// Assert: graded.archive.1.json = A (prior grade preserved).
+	archived, err := obj.Get(ctx, testBucket, archiveKey(1))
+	require.NoError(t, err, "regrade: graded.archive.1.json must exist")
+	assert.Equal(t, resultA, archived, "regrade: graded.archive.1.json must hold the prior result A")
+
+	// Assert: no graded.archive.2.json after a single regrade.
+	_, archiveErr = obj.Get(ctx, testBucket, archiveKey(2))
+	assert.True(t, errors.Is(archiveErr, store.ErrNotFound),
+		"regrade: graded.archive.2.json must NOT exist after a single regrade")
+}
+
+// TestArchivePriorGradedArtifact_MultipleRegrades verifies that successive
+// regrades accumulate archive slots: archive.1.json, archive.2.json, etc.
+func TestArchivePriorGradedArtifact_MultipleRegrades(t *testing.T) {
+	ctx := context.Background()
+	obj := newFakeObjStore()
+
+	resultA := []byte(`{"grade":"A"}`)
+	resultB := []byte(`{"grade":"B"}`)
+	resultC := []byte(`{"grade":"C"}`)
+
+	// First grade: write A, no archive.
+	require.NoError(t, archivePriorGradedArtifact(ctx, obj, testBucket, testTenantID, testSubmission))
+	require.NoError(t, obj.Put(ctx, testBucket, gradedKey(), resultA, "application/json"))
+
+	// Second grade (first regrade): archive A → archive.1, write B.
+	require.NoError(t, archivePriorGradedArtifact(ctx, obj, testBucket, testTenantID, testSubmission))
+	require.NoError(t, obj.Put(ctx, testBucket, gradedKey(), resultB, "application/json"))
+
+	// Third grade (second regrade): archive B → archive.2, write C.
+	require.NoError(t, archivePriorGradedArtifact(ctx, obj, testBucket, testTenantID, testSubmission))
+	require.NoError(t, obj.Put(ctx, testBucket, gradedKey(), resultC, "application/json"))
+
+	// Assertions:
+	got, err := obj.Get(ctx, testBucket, gradedKey())
+	require.NoError(t, err)
+	assert.Equal(t, resultC, got, "latest graded.v1.json must be C")
+
+	a1, err := obj.Get(ctx, testBucket, archiveKey(1))
+	require.NoError(t, err)
+	assert.Equal(t, resultA, a1, "archive.1 must hold A")
+
+	a2, err := obj.Get(ctx, testBucket, archiveKey(2))
+	require.NoError(t, err)
+	assert.Equal(t, resultB, a2, "archive.2 must hold B")
+
+	_, archiveErr := obj.Get(ctx, testBucket, archiveKey(3))
+	assert.True(t, errors.Is(archiveErr, store.ErrNotFound), "archive.3 must not exist")
 }
