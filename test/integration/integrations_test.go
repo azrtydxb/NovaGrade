@@ -208,19 +208,19 @@ func (w *webhookCapture) snapshot() ([]byte, string) {
 // inbound POST and returns 200 OK. Subsequent POSTs are also accepted (idempotent).
 func newWebhookReceiver(t *testing.T) (*httptest.Server, *webhookCapture) {
 	t.Helper()
-	cap := &webhookCapture{}
+	whCap := &webhookCapture{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		sig := r.Header.Get("X-NovaGrade-Signature")
-		cap.mu.Lock()
-		cap.body = body
-		cap.sig = sig
-		cap.got = true
-		cap.mu.Unlock()
+		whCap.mu.Lock()
+		whCap.body = body
+		whCap.sig = sig
+		whCap.got = true
+		whCap.mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(srv.Close)
-	return srv, cap
+	return srv, whCap
 }
 
 // pollWebhookReceiver polls cap.received() with exponential backoff until
@@ -458,6 +458,17 @@ func TestIntegrationsFlow(t *testing.T) {
 	imported2, _ := reimportResult["imported"].(float64)
 	assert.Equal(t, float64(2), imported2, "idempotent re-import must still report 2")
 
+	// Assert at the DB level: student table must contain exactly 2 students for this tenant.
+	// Query directly to prove idempotency is enforced at the database level, not just the API.
+	dbConn, err := pgxConnect(ctx, inf.dbCfg)
+	require.NoError(t, err, "open pgx connection to verify DB state")
+	defer func() { _ = dbConn.Close(ctx) }()
+
+	var studentCount int
+	err = dbConn.QueryRow(ctx, "SELECT count(*) FROM student WHERE tenant_id=$1", testTenantID).Scan(&studentCount)
+	require.NoError(t, err, "count students in DB for tenant")
+	assert.Equal(t, 2, studentCount, "DB must contain exactly 2 students after idempotent re-import (not 4)")
+
 	// ── Step 5: Webhook subscription ─────────────────────────────────────────
 	// Stand up the httptest receiver FIRST, then subscribe.
 	receiverSrv, cap := newWebhookReceiver(t)
@@ -552,10 +563,27 @@ func TestIntegrationsFlow(t *testing.T) {
 		t.Fatalf("class-results CSV header missing column %q (header=%v)", name, header)
 		return -1
 	}
-	_ = colIdx("question_no") // asserts existence
+	_ = colIdx("question_no") // assert column exists
+	awardedMarksIdx := colIdx("awarded")
 
 	// At least one data row must exist (the graded submission).
-	assert.Greater(t, len(rows), 1, "class-results CSV must have at least one data row (the graded submission)")
+	require.Greater(t, len(rows), 1, "class-results CSV must have at least one data row (the graded submission)")
+
+	// Assert that at least one data row has a non-empty awarded cell
+	// and that it parses as a float >= 0 (proof of actual mark values, not blank export).
+	var foundNonEmptyMark bool
+	for i := 1; i < len(rows); i++ {
+		if awardedMarksIdx < len(rows[i]) && rows[i][awardedMarksIdx] != "" {
+			markStr := rows[i][awardedMarksIdx]
+			var mark float64
+			_, err := fmt.Sscanf(markStr, "%f", &mark)
+			if err == nil && mark >= 0 {
+				foundNonEmptyMark = true
+				break
+			}
+		}
+	}
+	assert.True(t, foundNonEmptyMark, "class-results CSV must contain at least one row with a non-empty, parseable float awarded >= 0")
 
 	t.Logf("integrations: PASSED — enc creds verified, %d students imported, webhook HMAC OK, CSV %d rows",
 		int(imported), len(rows))
