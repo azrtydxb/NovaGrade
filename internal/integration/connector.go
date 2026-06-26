@@ -55,3 +55,25 @@ type RosterSource interface {
 type GradeSink interface {
 	ExportGrades(ctx context.Context, w io.Writer, rows []contracts.GradeRow) error
 }
+
+// RosterPuller fetches a student roster by calling a remote API.
+//
+// This interface is intentionally separate from RosterSource: RosterSource
+// models a file-parser (it reads from an io.Reader supplied by the caller),
+// whereas RosterPuller models an API-pull connector that reaches out to an
+// external service to fetch the roster itself. Implementing both would be
+// conceptually conflated; connectors that talk to an LMS REST API should
+// implement RosterPuller, while file-based connectors implement RosterSource.
+type RosterPuller interface {
+	PullRoster(ctx context.Context) ([]contracts.RosterStudent, error)
+}
+
+// GradePusher pushes grade rows to a remote API.
+//
+// Analogous to the split between GradeSink and this interface: GradeSink
+// writes to an io.Writer (file/stream), whereas GradePusher sends grades
+// directly to an external LMS endpoint (e.g. Google Classroom studentSubmissions
+// PATCH). LMS connectors should implement GradePusher rather than GradeSink.
+type GradePusher interface {
+	PushGrades(ctx context.Context, rows []contracts.GradeRow) error
+}
