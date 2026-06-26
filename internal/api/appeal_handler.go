@@ -90,6 +90,21 @@ func (h *AppealHandlers) FileAppeal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Audit-first: write audit event before creating the appeal.
+	subIDPtr := sub.ID
+	_, err := h.Store.InsertAuditEvent(r.Context(), store.InsertAuditEventParams{
+		TenantID:   tenantID,
+		EntityType: "submission",
+		EntityID:   &subIDPtr,
+		Actor:      p.ID,
+		Action:     "appeal_file",
+		Reason:     body.Reason,
+	})
+	if err != nil {
+		http.Error(w, "store error (audit)", http.StatusInternalServerError)
+		return
+	}
+
 	a, err := h.Store.CreateAppeal(r.Context(), store.CreateAppealParams{
 		TenantID:     tenantID,
 		SubmissionID: sub.ID,

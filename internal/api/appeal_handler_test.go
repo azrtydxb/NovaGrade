@@ -243,7 +243,8 @@ func buildAppealRouter(t *testing.T, h *api.AppealHandlers, resolver *auth.APIKe
 // Tests: POST /v1/submissions/{id}/appeals
 // ─────────────────────────────────────────────────────────────────────────────
 
-// TestFileAppeal_CreatesOpen verifies that filing an appeal creates it with status "open".
+// TestFileAppeal_CreatesOpen verifies that filing an appeal creates it with status "open"
+// and records an "appeal_file" audit event.
 func TestFileAppeal_CreatesOpen(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
@@ -285,6 +286,10 @@ func TestFileAppeal_CreatesOpen(t *testing.T) {
 	assert.Equal(t, tenantID, appeal.TenantID)
 	assert.Equal(t, "My score looks wrong", appeal.Reason)
 	assert.Equal(t, "student-1", appeal.RequestedBy)
+
+	// Verify audit event was recorded.
+	assert.Equal(t, 1, fakeStore.auditCount(), "should have one audit event")
+	assert.Equal(t, "appeal_file", fakeStore.latestAuditAction(), "audit action must be appeal_file")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
