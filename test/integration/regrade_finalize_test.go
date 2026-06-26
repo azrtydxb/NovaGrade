@@ -49,17 +49,17 @@ import (
 
 // newStatefulFakeAIServer returns an httptest.Server identical to newFakeAIServer
 // except that the grade-model handler is stateful: it counts calls globally and
-// returns awarded_marks=2 on the FIRST grade pass (calls 1–2) and awarded_marks=4
-// on the SECOND grade pass (calls 3+). This ensures the regrade produces a
+// returns awarded_marks=2 on the FIRST grade pass (calls 1–4) and awarded_marks=4
+// on the SECOND grade pass (calls 5+). This ensures the regrade produces a
 // different total so the test can assert GetFinalGrade returns a NEW value after
 // re-approve.
 //
-// With 2 questions (1a max_marks=2, 1b max_marks=3) per submission:
+// With 2 questions × 2 page renders = 4 grade-model calls per pass:
 //
-//	First  grade pass (calls 1–2): awarded_marks=2 → total = 2+2 = 4
-//	Second grade pass (calls 3–4): awarded_marks=4 → 1a capped at 2, 1b capped at 3 → total = 2+3 = 5
+//	First  grade pass (calls 1–4): awarded_marks=2 → 1a capped at 2, 1b capped at 2 → total = 8.00
+//	Second grade pass (calls 5+):  awarded_marks=4 → 1a capped at max, 1b capped at max → total = 10.00
 //
-// Either way origGrade.Total != newGrade.Total, which is what the test requires.
+// origGrade.Total (8.00) != newGrade.Total (10.00), which is what the test requires.
 //
 // The returned *int64 pointer is the shared gradeCallCount for logging.
 func newStatefulFakeAIServer(t *testing.T) (*httptest.Server, *int64) {
