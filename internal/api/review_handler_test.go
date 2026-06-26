@@ -683,6 +683,86 @@ func TestGetReview_OverlaysLatestOverride(t *testing.T) {
 	assert.Equal(t, 3.0, q2.AwardedMarks)
 }
 
+// TestGetReview_TotalsConsistentWithOverrides verifies that GET /review returns
+// a GradedPaper whose paper-level Total and Score100 are consistent with the
+// effective per-question AwardedMarks after teacher overrides are applied.
+//
+// Scenario: base paper has Q1=7/10 and Q2=3/5 → Total=10, MaxTotal=15, Score100=66.7.
+// A teacher override raises Q1 from 7→9, so the effective marks are Q1=9, Q2=3.
+// Expected: Total=12, MaxTotal=15, Score100=roundTo1(100*12/15)=80.0.
+// This proves that review-view totals are internally consistent.
+func TestGetReview_TotalsConsistentWithOverrides(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeReviewStore := newReviewFakeStore()
+	fakeObjects := NewFakeObjectStore()
+
+	sub := fakeReviewStore.seedSubmission(tenantID, contracts.StateTeacherReview)
+	// Base paper: Q1=7/10, Q2=3/5 → Total=10, MaxTotal=15, Score100=66.7
+	makeGradedPaper(t, fakeObjects, tenantID, sub.ID)
+
+	// Override Q1: 7 → 9 (effective awarded: Q1=9, Q2=3)
+	_, err := fakeReviewStore.InsertTeacherReview(context.Background(), store.InsertTeacherReviewParams{
+		TenantID:     tenantID,
+		SubmissionID: sub.ID,
+		QuestionNo:   "1",
+		OldMarks:     7.0,
+		NewMarks:     9.0,
+		Feedback:     "Reconsidered — deserves more credit",
+		Comment:      "override",
+		Actor:        "teacher-1",
+	})
+	require.NoError(t, err)
+
+	h := &api.ReviewHandlers{
+		Store:      fakeReviewStore,
+		Objects:    fakeObjects,
+		DeployMode: "onprem",
+	}
+
+	principal := auth.Principal{
+		ID:       "teacher-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/submissions/"+sub.ID.String()+"/review", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildReviewRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+
+	var respPaper contracts.GradedPaper
+	require.NoError(t, json.Unmarshal(resp["paper"], &respPaper))
+
+	// Per-question check: Q1 must reflect the override.
+	var q1 *contracts.GradedQuestion
+	for i := range respPaper.Questions {
+		if respPaper.Questions[i].QuestionNo == "1" {
+			q1 = &respPaper.Questions[i]
+			break
+		}
+	}
+	require.NotNil(t, q1)
+	assert.Equal(t, 9.0, q1.AwardedMarks, "Q1 awarded marks must reflect override (9.0)")
+
+	// Paper-level totals must be consistent with the overlaid marks.
+	// Total = 9 (Q1) + 3 (Q2) = 12
+	assert.Equal(t, 12.0, respPaper.Total, "Total must be recomputed from overlaid marks")
+	// MaxTotal = 10 (Q1) + 5 (Q2) = 15 (unchanged by overrides)
+	assert.Equal(t, 15.0, respPaper.MaxTotal, "MaxTotal must remain the sum of MaxMarks")
+	// Score100 = roundTo1(100 * 12 / 15) = roundTo1(80.0) = 80.0
+	assert.Equal(t, 80.0, respPaper.Score100, "Score100 must be recomputed from effective totals")
+}
+
 // TestGetReview_Locked verifies that locked=true when the submission is NOT
 // in teacher_review (e.g. approved).
 func TestGetReview_Locked(t *testing.T) {

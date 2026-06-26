@@ -130,17 +130,8 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 	}
 	effective := overlayReviews(paper, reviews)
 
-	// Compute totals from effective paper.
-	var total, maxTotal float64
-	for _, q := range effective.Questions {
-		total += q.AwardedMarks
-		maxTotal += q.MaxMarks
-	}
-	effective.Total = total
-	effective.MaxTotal = maxTotal
-	if maxTotal > 0 {
-		effective.Score100 = (total / maxTotal) * 100
-	}
+	// Recompute totals from effective paper (single source of truth shared with review view).
+	effective = recomputeEffectiveTotals(effective)
 
 	// Audit-first: write audit event before any artifact/DB write.
 	subID := sub.ID

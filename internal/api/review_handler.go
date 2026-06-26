@@ -340,7 +340,10 @@ func (h *ReviewHandlers) PatchQuestion(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(updatedQ)
 }
 
-// overlayReviews applies teacher overrides onto a GradedPaper.
+// overlayReviews applies teacher overrides onto a GradedPaper and recomputes
+// the paper-level totals so that Total, MaxTotal, and Score100 are consistent
+// with the overlaid per-question AwardedMarks.
+//
 // reviews must be in created_at ASC order (as returned by ListTeacherReviews).
 // The last row per question_no wins (latest-write-wins semantics).
 func overlayReviews(paper contracts.GradedPaper, reviews []store.TeacherReview) contracts.GradedPaper {
@@ -365,5 +368,40 @@ func overlayReviews(paper contracts.GradedPaper, reviews []store.TeacherReview) 
 			paper.Questions[i].Justification = r.Feedback
 		}
 	}
+
+	// Recompute paper-level totals from the overlaid questions so that the
+	// response is internally consistent (Total/Score100 match per-question marks).
+	paper = recomputeEffectiveTotals(paper)
 	return paper
+}
+
+// recomputeEffectiveTotals rebuilds Total, MaxTotal, and Score100 from the
+// current per-question AwardedMarks/MaxMarks. It is the single source of truth
+// for effective-paper totals used by both the review view and the approval path.
+//
+// Score100 = roundTo1(100 * Total / MaxTotal); 0 when MaxTotal == 0.
+// This matches the grade-pipeline rounding (internal/pipeline/grade/grader.go).
+func recomputeEffectiveTotals(paper contracts.GradedPaper) contracts.GradedPaper {
+	var total, maxTotal float64
+	for _, q := range paper.Questions {
+		total += q.AwardedMarks
+		maxTotal += q.MaxMarks
+	}
+	paper.Total = total
+	paper.MaxTotal = maxTotal
+	if maxTotal > 0 {
+		paper.Score100 = reviewRoundTo1(100 * total / maxTotal)
+	} else {
+		paper.Score100 = 0
+	}
+	return paper
+}
+
+// reviewRoundTo1 rounds f to one decimal place.
+// Mirrors the rounding in internal/pipeline/grade/grader.go (roundTo1) so that
+// the review view, the approval snapshot, and the grade stage all agree.
+func reviewRoundTo1(f float64) float64 {
+	shifted := f * 10
+	rounded := float64(int64(shifted+0.5)) / 10
+	return rounded
 }
