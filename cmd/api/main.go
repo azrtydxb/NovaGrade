@@ -190,6 +190,12 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	moh := &api.ModerationHandlers{
+		Store:      st,
+		Objects:    objAdapter,
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -230,6 +236,10 @@ func main() {
 		// Analytics
 		r.Get("/assessment-versions/{avid}/analytics", anah.GetAnalytics)
 		r.Get("/assessment-versions/{avid}/override-stats", anah.GetOverrideStats)
+		// Moderation (second-marker sampled workflow)
+		r.Post("/assessment-versions/{avid}/moderation", moh.StartSession)
+		r.Post("/moderation/{id}/marks", moh.RecordMark)
+		r.Get("/moderation/{id}", moh.GetComparison)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
