@@ -314,6 +314,140 @@ func (s *Store) ListAuditEventsBySubmission(ctx context.Context, tenantID, submi
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TeacherReview domain type and repository methods
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TeacherReview is the public domain representation of a teacher_review row.
+type TeacherReview struct {
+	ID           uuid.UUID
+	TenantID     uuid.UUID
+	SubmissionID uuid.UUID
+	QuestionNo   string
+	OldMarks     float64
+	NewMarks     float64
+	Feedback     string
+	Comment      string
+	Actor        string
+	CreatedAt    time.Time
+}
+
+// InsertTeacherReviewParams carries the values for a new teacher_review row.
+type InsertTeacherReviewParams struct {
+	TenantID     uuid.UUID
+	SubmissionID uuid.UUID
+	QuestionNo   string
+	OldMarks     float64
+	NewMarks     float64
+	Feedback     string
+	Comment      string
+	Actor        string
+}
+
+// InsertTeacherReview appends a per-question review row. It is append-only;
+// callers may insert multiple rows for the same question_no to represent
+// successive overrides.
+func (s *Store) InsertTeacherReview(ctx context.Context, p InsertTeacherReviewParams) (TeacherReview, error) {
+	row, err := s.queries.InsertTeacherReview(ctx, db.InsertTeacherReviewParams{
+		TenantID:     p.TenantID,
+		SubmissionID: p.SubmissionID,
+		QuestionNo:   p.QuestionNo,
+		OldMarks:     p.OldMarks,
+		NewMarks:     p.NewMarks,
+		Feedback:     p.Feedback,
+		Comment:      p.Comment,
+		Actor:        p.Actor,
+	})
+	if err != nil {
+		return TeacherReview{}, fmt.Errorf("store: InsertTeacherReview: %w", err)
+	}
+	return teacherReviewFromDB(row), nil
+}
+
+// ListTeacherReviews returns all teacher_review rows for a submission within a
+// tenant, ordered by created_at ASC (oldest first). The latest row per
+// question_no represents the current override when merging.
+func (s *Store) ListTeacherReviews(ctx context.Context, tenantID uuid.UUID, submissionID uuid.UUID) ([]TeacherReview, error) {
+	rows, err := s.queries.ListTeacherReviews(ctx, db.ListTeacherReviewsParams{
+		TenantID:     tenantID,
+		SubmissionID: submissionID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("store: ListTeacherReviews: %w", err)
+	}
+	result := make([]TeacherReview, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, teacherReviewRowFromDB(row))
+	}
+	return result, nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FinalGrade domain type and repository methods (insert + get only; no update)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// FinalGrade is the public domain representation of a final_grade row.
+// final_grade is append-only: there are no update or delete methods.
+type FinalGrade struct {
+	ID           uuid.UUID
+	TenantID     uuid.UUID
+	SubmissionID uuid.UUID
+	Total        float64
+	MaxTotal     float64
+	Score100     float64
+	GradedKey    string
+	ApprovedBy   string
+	ApprovedAt   time.Time
+	CreatedAt    time.Time
+}
+
+// InsertFinalGradeParams carries the values for a new final_grade row.
+type InsertFinalGradeParams struct {
+	TenantID     uuid.UUID
+	SubmissionID uuid.UUID
+	Total        float64
+	MaxTotal     float64
+	Score100     float64
+	GradedKey    string
+	ApprovedBy   string
+	ApprovedAt   time.Time
+}
+
+// InsertFinalGrade inserts an immutable approval snapshot into final_grade and
+// returns the persisted row. There is no update or delete method for this table.
+func (s *Store) InsertFinalGrade(ctx context.Context, p InsertFinalGradeParams) (FinalGrade, error) {
+	row, err := s.queries.InsertFinalGrade(ctx, db.InsertFinalGradeParams{
+		TenantID:     p.TenantID,
+		SubmissionID: p.SubmissionID,
+		Total:        p.Total,
+		MaxTotal:     p.MaxTotal,
+		Score100:     p.Score100,
+		GradedKey:    p.GradedKey,
+		ApprovedBy:   p.ApprovedBy,
+		ApprovedAt:   timeToPgtypeTimestamptz(p.ApprovedAt),
+	})
+	if err != nil {
+		return FinalGrade{}, fmt.Errorf("store: InsertFinalGrade: %w", err)
+	}
+	return finalGradeFromInsertRow(row), nil
+}
+
+// GetFinalGrade retrieves the most recent final_grade row for the given
+// submission within a tenant. Returns ErrNotFound if no row exists.
+func (s *Store) GetFinalGrade(ctx context.Context, tenantID uuid.UUID, submissionID uuid.UUID) (FinalGrade, error) {
+	row, err := s.queries.GetFinalGrade(ctx, db.GetFinalGradeParams{
+		TenantID:     tenantID,
+		SubmissionID: submissionID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return FinalGrade{}, fmt.Errorf("GetFinalGrade %s: %w", submissionID, ErrNotFound)
+		}
+		return FinalGrade{}, fmt.Errorf("store: GetFinalGrade: %w", err)
+	}
+	return finalGradeFromGetRow(row), nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Mapping helpers — db package types → public domain types
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -395,4 +529,73 @@ func nullJSON(b []byte) []byte {
 		return nil
 	}
 	return b
+}
+
+// teacherReviewFromDB converts a db.InsertTeacherReviewRow to the public TeacherReview type.
+func teacherReviewFromDB(r db.InsertTeacherReviewRow) TeacherReview {
+	return TeacherReview{
+		ID:           r.ID,
+		TenantID:     r.TenantID,
+		SubmissionID: r.SubmissionID,
+		QuestionNo:   r.QuestionNo,
+		OldMarks:     r.OldMarks,
+		NewMarks:     r.NewMarks,
+		Feedback:     r.Feedback,
+		Comment:      r.Comment,
+		Actor:        r.Actor,
+		CreatedAt:    r.CreatedAt.Time,
+	}
+}
+
+// teacherReviewRowFromDB converts a db.ListTeacherReviewsRow to the public TeacherReview type.
+func teacherReviewRowFromDB(r db.ListTeacherReviewsRow) TeacherReview {
+	return TeacherReview{
+		ID:           r.ID,
+		TenantID:     r.TenantID,
+		SubmissionID: r.SubmissionID,
+		QuestionNo:   r.QuestionNo,
+		OldMarks:     r.OldMarks,
+		NewMarks:     r.NewMarks,
+		Feedback:     r.Feedback,
+		Comment:      r.Comment,
+		Actor:        r.Actor,
+		CreatedAt:    r.CreatedAt.Time,
+	}
+}
+
+// finalGradeFromInsertRow converts a db.InsertFinalGradeRow to the public FinalGrade type.
+func finalGradeFromInsertRow(r db.InsertFinalGradeRow) FinalGrade {
+	return FinalGrade{
+		ID:           r.ID,
+		TenantID:     r.TenantID,
+		SubmissionID: r.SubmissionID,
+		Total:        r.Total,
+		MaxTotal:     r.MaxTotal,
+		Score100:     r.Score100,
+		GradedKey:    r.GradedKey,
+		ApprovedBy:   r.ApprovedBy,
+		ApprovedAt:   r.ApprovedAt.Time,
+		CreatedAt:    r.CreatedAt.Time,
+	}
+}
+
+// finalGradeFromGetRow converts a db.GetFinalGradeRow to the public FinalGrade type.
+func finalGradeFromGetRow(r db.GetFinalGradeRow) FinalGrade {
+	return FinalGrade{
+		ID:           r.ID,
+		TenantID:     r.TenantID,
+		SubmissionID: r.SubmissionID,
+		Total:        r.Total,
+		MaxTotal:     r.MaxTotal,
+		Score100:     r.Score100,
+		GradedKey:    r.GradedKey,
+		ApprovedBy:   r.ApprovedBy,
+		ApprovedAt:   r.ApprovedAt.Time,
+		CreatedAt:    r.CreatedAt.Time,
+	}
+}
+
+// timeToPgtypeTimestamptz converts a time.Time to pgtype.Timestamptz for sqlc parameters.
+func timeToPgtypeTimestamptz(t time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: t, Valid: true}
 }

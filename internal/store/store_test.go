@@ -151,6 +151,117 @@ func TestSetSubmissionState_notFound(t *testing.T) {
 	require.True(t, errors.Is(err, ErrNotFound), "expected ErrNotFound, got: %v", err)
 }
 
+func TestInsertAndListTeacherReviews(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	tenantID := mustCreateSchool(t, st)
+	sub, err := st.CreateSubmission(ctx, CreateSubmissionParams{TenantID: tenantID})
+	require.NoError(t, err)
+	submissionID := sub.ID
+
+	// Insert review for question "Q1".
+	r1, err := st.InsertTeacherReview(ctx, InsertTeacherReviewParams{
+		TenantID:     tenantID,
+		SubmissionID: submissionID,
+		QuestionNo:   "Q1",
+		OldMarks:     3.0,
+		NewMarks:     4.5,
+		Feedback:     "Good partial answer",
+		Comment:      "Award method marks",
+		Actor:        "teacher@school.com",
+	})
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, r1.ID)
+	require.Equal(t, "Q1", r1.QuestionNo)
+	require.Equal(t, 4.5, r1.NewMarks)
+
+	// Insert review for question "Q2".
+	r2, err := st.InsertTeacherReview(ctx, InsertTeacherReviewParams{
+		TenantID:     tenantID,
+		SubmissionID: submissionID,
+		QuestionNo:   "Q2",
+		OldMarks:     2.0,
+		NewMarks:     2.0,
+		Feedback:     "Correct",
+		Comment:      "",
+		Actor:        "teacher@school.com",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Q2", r2.QuestionNo)
+
+	// Insert a later override for "Q1" — same question, different actor.
+	r3, err := st.InsertTeacherReview(ctx, InsertTeacherReviewParams{
+		TenantID:     tenantID,
+		SubmissionID: submissionID,
+		QuestionNo:   "Q1",
+		OldMarks:     4.5,
+		NewMarks:     5.0,
+		Feedback:     "Reconsidered",
+		Comment:      "Full marks",
+		Actor:        "head@school.com",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 5.0, r3.NewMarks)
+
+	reviews, err := st.ListTeacherReviews(ctx, tenantID, submissionID)
+	require.NoError(t, err)
+	require.Len(t, reviews, 3, "expected 3 review rows (all appended)")
+
+	// Rows must be ordered by created_at ASC.
+	require.Equal(t, r1.ID, reviews[0].ID)
+	require.Equal(t, r2.ID, reviews[1].ID)
+	require.Equal(t, r3.ID, reviews[2].ID)
+}
+
+func TestFinalGradeRoundTrip(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	tenantID := mustCreateSchool(t, st)
+	sub, err := st.CreateSubmission(ctx, CreateSubmissionParams{TenantID: tenantID})
+	require.NoError(t, err)
+
+	approvedAt := time.Now().UTC().Truncate(time.Microsecond)
+
+	inserted, err := st.InsertFinalGrade(ctx, InsertFinalGradeParams{
+		TenantID:     tenantID,
+		SubmissionID: sub.ID,
+		Total:        82.5,
+		MaxTotal:     100.0,
+		Score100:     82.5,
+		GradedKey:    "graded/2024/exam1.json",
+		ApprovedBy:   "principal@school.com",
+		ApprovedAt:   approvedAt,
+	})
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, inserted.ID)
+
+	got, err := st.GetFinalGrade(ctx, tenantID, sub.ID)
+	require.NoError(t, err)
+	require.Equal(t, inserted.ID, got.ID)
+	require.Equal(t, tenantID, got.TenantID)
+	require.Equal(t, sub.ID, got.SubmissionID)
+	require.InDelta(t, 82.5, got.Total, 0.001)
+	require.InDelta(t, 100.0, got.MaxTotal, 0.001)
+	require.InDelta(t, 82.5, got.Score100, 0.001)
+	require.Equal(t, "graded/2024/exam1.json", got.GradedKey)
+	require.Equal(t, "principal@school.com", got.ApprovedBy)
+	require.WithinDuration(t, approvedAt, got.ApprovedAt, time.Second)
+}
+
+func TestGetFinalGrade_NotApproved(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	tenantID := mustCreateSchool(t, st)
+	sub, err := st.CreateSubmission(ctx, CreateSubmissionParams{TenantID: tenantID})
+	require.NoError(t, err)
+
+	_, err = st.GetFinalGrade(ctx, tenantID, sub.ID)
+	require.ErrorIs(t, err, ErrNotFound, "expected ErrNotFound for unapproved submission, got: %v", err)
+}
+
 func TestInsertAuditEvent(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()

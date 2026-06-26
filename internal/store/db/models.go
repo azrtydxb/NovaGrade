@@ -107,6 +107,12 @@ type FinalGrade struct {
 	Percentage   pgtype.Numeric
 	GradeLetter  pgtype.Text
 	CreatedAt    pgtype.Timestamptz
+	Total        float64
+	MaxTotal     float64
+	Score100     float64
+	GradedKey    string
+	ApprovedBy   string
+	ApprovedAt   pgtype.Timestamptz
 }
 
 type MarkingGuide struct {
@@ -210,6 +216,12 @@ type TeacherReview struct {
 	Notes        string
 	ReviewedAt   pgtype.Timestamptz
 	CreatedAt    pgtype.Timestamptz
+	QuestionNo   string
+	OldMarks     float64
+	NewMarks     float64
+	Feedback     string
+	Comment      string
+	Actor        string
 }
 
 type Term struct {

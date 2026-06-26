@@ -13,14 +13,18 @@ import (
 type Querier interface {
 	CreateSubmission(ctx context.Context, arg CreateSubmissionParams) (Submission, error)
 	FailSubmission(ctx context.Context, arg FailSubmissionParams) (int64, error)
+	GetFinalGrade(ctx context.Context, arg GetFinalGradeParams) (GetFinalGradeRow, error)
 	GetSubmission(ctx context.Context, id uuid.UUID) (Submission, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
+	InsertFinalGrade(ctx context.Context, arg InsertFinalGradeParams) (InsertFinalGradeRow, error)
+	InsertTeacherReview(ctx context.Context, arg InsertTeacherReviewParams) (InsertTeacherReviewRow, error)
 	// Returns all audit_event rows for a specific submission (entity_id) scoped
 	// to the given tenant, ordered chronologically (oldest first).
 	// Only rows with entity_type = 'submission' are returned.
 	ListAuditEventsBySubmission(ctx context.Context, arg ListAuditEventsBySubmissionParams) ([]AuditEvent, error)
 	// When $2 is the empty string, no state filter is applied (all states match).
 	ListSubmissionsByState(ctx context.Context, arg ListSubmissionsByStateParams) ([]Submission, error)
+	ListTeacherReviews(ctx context.Context, arg ListTeacherReviewsParams) ([]ListTeacherReviewsRow, error)
 	SetSourcePDFKey(ctx context.Context, arg SetSourcePDFKeyParams) (int64, error)
 	SetSubmissionState(ctx context.Context, arg SetSubmissionStateParams) (int64, error)
 }
