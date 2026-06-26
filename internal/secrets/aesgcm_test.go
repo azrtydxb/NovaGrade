@@ -76,3 +76,11 @@ func TestKeyFromEnv(t *testing.T) {
 		t.Fatal("decoded key mismatch")
 	}
 }
+
+func TestDecryptShortBlobFails(t *testing.T) {
+	key := newKey(t)
+	short := make([]byte, 10) // < nonceSize(12) + gcm.Overhead(16) = 28
+	if _, err := secrets.Decrypt(key, short); err == nil {
+		t.Fatal("expected error for short blob, got nil")
+	}
+}

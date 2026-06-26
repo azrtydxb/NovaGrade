@@ -12,6 +12,8 @@ CREATE TABLE integration_connection (
     UNIQUE (tenant_id, category, provider)
 );
 
+CREATE INDEX IF NOT EXISTS idx_integration_connection_tenant_created ON integration_connection (tenant_id, created_at);
+
 CREATE TABLE webhook_subscription (
     id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id   uuid        NOT NULL REFERENCES school(id),
@@ -24,4 +26,5 @@ CREATE TABLE webhook_subscription (
 
 -- +goose Down
 DROP TABLE IF EXISTS webhook_subscription;
+DROP INDEX IF EXISTS idx_integration_connection_tenant_created;
 DROP TABLE IF EXISTS integration_connection;

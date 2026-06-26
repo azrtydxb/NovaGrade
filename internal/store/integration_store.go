@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/azrtydxb/novagrade/internal/integration"
 	"github.com/azrtydxb/novagrade/internal/store/db"
@@ -32,7 +33,9 @@ type UpsertConnectionParams struct {
 func domainConnection(row db.IntegrationConnection) integration.Connection {
 	var cfg map[string]any
 	if row.Config != nil {
-		_ = json.Unmarshal(row.Config, &cfg)
+		if err := json.Unmarshal(row.Config, &cfg); err != nil {
+			log.Printf("store: integration_connection %s: bad config json: %v", row.ID, err)
+		}
 	}
 	return integration.Connection{
 		ID:        row.ID,
