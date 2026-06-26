@@ -21,7 +21,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -37,7 +36,6 @@ import (
 // ApprovalStore is the subset of store.Store required by ApprovalHandlers.
 type ApprovalStore interface {
 	GetSubmission(ctx context.Context, id uuid.UUID) (store.Submission, error)
-	GetFinalGrade(ctx context.Context, tenantID uuid.UUID, submissionID uuid.UUID) (store.FinalGrade, error)
 	InsertAuditEvent(ctx context.Context, p store.InsertAuditEventParams) (store.AuditEvent, error)
 	InsertFinalGrade(ctx context.Context, p store.InsertFinalGradeParams) (store.FinalGrade, error)
 	ListTeacherReviews(ctx context.Context, tenantID, submissionID uuid.UUID) ([]store.TeacherReview, error)
@@ -65,13 +63,19 @@ type ApprovalHandlers struct {
 // Steps (audit-first):
 //  1. Auth + RBAC + tenant isolation (404 on failure).
 //  2. 409 if sub.State != teacher_review.
-//  3. GetFinalGrade — if EXISTS, take idempotent path (re-publish only).
-//  4. Load graded.v1.json + overlay teacher overrides → effective GradedPaper (500 if missing).
-//  5. InsertAuditEvent(action="approve") — if this fails → 500, nothing else persisted/published.
-//  6. PutObject(graded.final.json) — the snapshot artifact.
-//  7. InsertFinalGrade(snapshot with overrides applied, approved_by=principal).
-//  8. Publish Envelope{Stage: contracts.StageApprove} to commands.q.
-//  9. Return 200 + FinalGrade JSON.
+//  3. Load graded.v1.json + overlay teacher overrides → effective GradedPaper (500 if missing).
+//  4. InsertAuditEvent(action="approve", new_value=JSON{total,max_total,score_100}) — audit-first;
+//     records the final totals so the prior grade survives in the append-only audit trail across
+//     the upsert. If this fails → 500, nothing else persisted/published.
+//  5. PutObject(graded.final.json) — the snapshot artifact.
+//  6. InsertFinalGrade (UPSERT) — inserts on first approve, updates on post-regrade re-approve.
+//  7. Publish Envelope{Stage: contracts.StageApprove} to commands.q.
+//  8. Return 200 + FinalGrade JSON.
+//
+// This is idempotent-in-effect: a plain retry (no regrade between) recomputes identical values
+// and upserts the same row (updated_at bumps, graded.final rewritten identically), then
+// re-publishes — net effect identical. A post-regrade re-approve (graded.v1.json now holds the
+// new grade) upserts the NEW final grade. Prior grades are preserved in the audit_event trail.
 func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 	p, ok := auth.PrincipalFromContext(r.Context())
 	if !ok {
@@ -86,43 +90,6 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 
 	if sub.State != contracts.StateTeacherReview {
 		http.Error(w, "submission is not in teacher_review state", http.StatusConflict)
-		return
-	}
-
-	// Idempotent path: if a FinalGrade already exists, audit + re-publish and return it.
-	existingFG, err := h.Store.GetFinalGrade(r.Context(), tenantID, sub.ID)
-	if err == nil {
-		// FinalGrade already exists — idempotent retry: audit first, then re-publish.
-		subID := sub.ID
-		_, auditErr := h.Store.InsertAuditEvent(r.Context(), store.InsertAuditEventParams{
-			TenantID:   tenantID,
-			EntityType: "submission",
-			EntityID:   &subID,
-			Actor:      p.ID,
-			Action:     "approve",
-			Reason:     "idempotent re-publish: FinalGrade already exists",
-		})
-		if auditErr != nil {
-			http.Error(w, "store error (audit)", http.StatusInternalServerError)
-			return
-		}
-		env := contracts.Envelope{
-			TenantID:      sub.TenantID.String(),
-			Principal:     p.ID,
-			SubmissionID:  sub.ID.String(),
-			Stage:         contracts.StageApprove,
-			CorrelationID: uuid.New().String(),
-		}
-		if err := h.Bus.Publish(r.Context(), "commands.q", env); err != nil {
-			http.Error(w, "bus error", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(existingFG)
-		return
-	}
-	if !errors.Is(err, store.ErrNotFound) {
-		http.Error(w, "store error (get_final_grade)", http.StatusInternalServerError)
 		return
 	}
 
@@ -153,13 +120,25 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 	effective = recomputeEffectiveTotals(effective)
 
 	// Audit-first: write audit event before any artifact/DB write.
+	// new_value records the final totals so prior grades survive in the append-only audit trail
+	// across the upsert.
 	subID := sub.ID
+	newValueJSON, err := json.Marshal(map[string]any{
+		"total":     effective.Total,
+		"max_total": effective.MaxTotal,
+		"score_100": effective.Score100,
+	})
+	if err != nil {
+		http.Error(w, "failed to marshal audit new_value", http.StatusInternalServerError)
+		return
+	}
 	_, err = h.Store.InsertAuditEvent(r.Context(), store.InsertAuditEventParams{
 		TenantID:   tenantID,
 		EntityType: "submission",
 		EntityID:   &subID,
 		Actor:      p.ID,
 		Action:     "approve",
+		NewValue:   newValueJSON,
 		Reason:     "teacher approved graded submission",
 	})
 	if err != nil {
@@ -179,7 +158,7 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist the immutable final grade snapshot.
+	// Persist the approval snapshot (UPSERT — inserts on first approve, updates on re-approve).
 	now := time.Now()
 	fg, err := h.Store.InsertFinalGrade(r.Context(), store.InsertFinalGradeParams{
 		TenantID:     tenantID,
@@ -205,9 +184,6 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		CorrelationID: uuid.New().String(),
 	}
 	if err := h.Bus.Publish(r.Context(), "commands.q", env); err != nil {
-		// Command publish failure after all DB writes. Log in production;
-		// the orchestrator can reconcile state on resync or manual replay.
-		// Return 500 to signal to the caller that the full operation did not complete.
 		http.Error(w, "bus error", http.StatusInternalServerError)
 		return
 	}

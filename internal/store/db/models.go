@@ -125,6 +125,7 @@ type FinalGrade struct {
 	GradedKey    string
 	ApprovedBy   string
 	ApprovedAt   pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
 }
 
 type IntegrationConnection struct {
