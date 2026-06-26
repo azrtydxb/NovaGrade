@@ -52,3 +52,13 @@ UPDATE submission
    SET source_pdf_key = $2,
        updated_at     = now()
  WHERE id = $1;
+
+-- name: ListSubmissionsByAssessmentVersion :many
+SELECT id, tenant_id, assessment_version_id, student_id,
+    state, current_stage, attempt, error_detail,
+    source_pdf_key, transcript_key, graded_key,
+    created_at, updated_at
+FROM submission
+WHERE tenant_id = $1
+  AND assessment_version_id = $2
+ORDER BY created_at DESC;

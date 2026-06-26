@@ -18,6 +18,7 @@ type Querier interface {
 	GetIntegrationConnectionWithCreds(ctx context.Context, arg GetIntegrationConnectionWithCredsParams) (IntegrationConnection, error)
 	// Returns the highest-version marking_guide row for the given tenant + assessment_version.
 	GetLatestGuide(ctx context.Context, arg GetLatestGuideParams) (GetLatestGuideRow, error)
+	GetStudent(ctx context.Context, arg GetStudentParams) (Student, error)
 	GetSubmission(ctx context.Context, id uuid.UUID) (Submission, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) (AuditEvent, error)
 	InsertFinalGrade(ctx context.Context, arg InsertFinalGradeParams) (InsertFinalGradeRow, error)
@@ -33,6 +34,7 @@ type Querier interface {
 	// Returns all marking_guide versions for a tenant + assessment_version, newest first.
 	ListGuideVersions(ctx context.Context, arg ListGuideVersionsParams) ([]ListGuideVersionsRow, error)
 	ListIntegrationConnections(ctx context.Context, tenantID uuid.UUID) ([]ListIntegrationConnectionsRow, error)
+	ListSubmissionsByAssessmentVersion(ctx context.Context, arg ListSubmissionsByAssessmentVersionParams) ([]Submission, error)
 	// When $2 is the empty string, no state filter is applied (all states match).
 	ListSubmissionsByState(ctx context.Context, arg ListSubmissionsByStateParams) ([]Submission, error)
 	ListTeacherReviews(ctx context.Context, arg ListTeacherReviewsParams) ([]ListTeacherReviewsRow, error)

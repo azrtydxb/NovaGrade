@@ -78,7 +78,7 @@ func (h *ExportHandlers) ExportCSV(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Determine effective GradedPaper.
-	paper, err := h.effectivePaper(r.Context(), tenantID, sub)
+	paper, err := effectiveGradedPaper(r.Context(), h.Store, h.Objects, tenantID, sub)
 	if err != nil {
 		if errors.Is(err, errNotGradedYet) {
 			http.Error(w, "not graded yet", http.StatusNotFound)
@@ -134,20 +134,25 @@ func (h *ExportHandlers) ExportCSV(w http.ResponseWriter, r *http.Request) {
 // artifact exists in the object store.
 var errNotGradedYet = errors.New("not graded yet")
 
-// effectivePaper resolves the effective GradedPaper for a submission:
+// effectiveGradedPaper resolves the effective GradedPaper for a submission:
 //   - FinalGrade exists → load the baked-in artifact (graded.final.json).
 //   - No FinalGrade → load graded.v1.json + overlay ListTeacherReviews.
 //   - Artifact missing from object store → errNotGradedYet.
-func (h *ExportHandlers) effectivePaper(
+//
+// It is a package-level helper so that both ExportHandlers.ExportCSV and the
+// class-results CSV handler share identical effective-grade selection logic.
+func effectiveGradedPaper(
 	ctx context.Context,
+	st ExportStore,
+	objects ObjectStore,
 	tenantID uuid.UUID,
 	sub store.Submission,
 ) (contracts.GradedPaper, error) {
 	// Try final_grade first (approved/published/exported path).
-	fg, err := h.Store.GetFinalGrade(ctx, tenantID, sub.ID)
+	fg, err := st.GetFinalGrade(ctx, tenantID, sub.ID)
 	if err == nil {
 		// FinalGrade exists — load the baked-in snapshot.
-		data, err := h.Objects.GetObject(ctx, fg.GradedKey)
+		data, err := objects.GetObject(ctx, fg.GradedKey)
 		if err != nil {
 			return contracts.GradedPaper{}, errNotGradedYet
 		}
@@ -163,7 +168,7 @@ func (h *ExportHandlers) effectivePaper(
 
 	// No FinalGrade — fall back to graded.v1.json + overlayReviews.
 	objectKey := fmt.Sprintf("%s/%s/graded.v1.json", sub.TenantID, sub.ID)
-	data, err := h.Objects.GetObject(ctx, objectKey)
+	data, err := objects.GetObject(ctx, objectKey)
 	if err != nil {
 		return contracts.GradedPaper{}, errNotGradedYet
 	}
@@ -173,7 +178,7 @@ func (h *ExportHandlers) effectivePaper(
 		return contracts.GradedPaper{}, fmt.Errorf("corrupt graded.v1 artifact: %w", err)
 	}
 
-	reviews, err := h.Store.ListTeacherReviews(ctx, tenantID, sub.ID)
+	reviews, err := st.ListTeacherReviews(ctx, tenantID, sub.ID)
 	if err != nil {
 		return contracts.GradedPaper{}, fmt.Errorf("store error (list_teacher_reviews): %w", err)
 	}

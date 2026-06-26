@@ -207,3 +207,53 @@ func (q *Queries) SetSubmissionState(ctx context.Context, arg SetSubmissionState
 	}
 	return result.RowsAffected(), nil
 }
+
+const listSubmissionsByAssessmentVersion = `-- name: ListSubmissionsByAssessmentVersion :many
+SELECT id, tenant_id, assessment_version_id, student_id,
+    state, current_stage, attempt, error_detail,
+    source_pdf_key, transcript_key, graded_key,
+    created_at, updated_at
+FROM submission
+WHERE tenant_id = $1
+  AND assessment_version_id = $2
+ORDER BY created_at DESC
+`
+
+type ListSubmissionsByAssessmentVersionParams struct {
+	TenantID            uuid.UUID
+	AssessmentVersionID uuid.NullUUID
+}
+
+func (q *Queries) ListSubmissionsByAssessmentVersion(ctx context.Context, arg ListSubmissionsByAssessmentVersionParams) ([]Submission, error) {
+	rows, err := q.db.Query(ctx, listSubmissionsByAssessmentVersion, arg.TenantID, arg.AssessmentVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Submission
+	for rows.Next() {
+		var i Submission
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.AssessmentVersionID,
+			&i.StudentID,
+			&i.State,
+			&i.CurrentStage,
+			&i.Attempt,
+			&i.ErrorDetail,
+			&i.SourcePdfKey,
+			&i.TranscriptKey,
+			&i.GradedKey,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

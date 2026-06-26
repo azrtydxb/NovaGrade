@@ -595,3 +595,63 @@ func finalGradeFromGetRow(r db.GetFinalGradeRow) FinalGrade {
 		CreatedAt:    r.CreatedAt.Time,
 	}
 }
+
+// Student is the public domain representation of a student row.
+type Student struct {
+	ID        uuid.UUID
+	TenantID  uuid.UUID
+	Email     string
+	FullName  string
+	CreatedAt time.Time
+}
+
+// UpsertStudent inserts or updates a student by (tenant_id, email).
+func (s *Store) UpsertStudent(ctx context.Context, tenantID uuid.UUID, email, fullName string) (Student, error) {
+	row, err := s.queries.UpsertStudent(ctx, db.UpsertStudentParams{
+		TenantID: tenantID,
+		Email:    email,
+		FullName: fullName,
+	})
+	if err != nil {
+		return Student{}, fmt.Errorf("store: UpsertStudent: %w", err)
+	}
+	return studentFromDB(row), nil
+}
+
+// GetStudent retrieves a student by tenant + id.
+func (s *Store) GetStudent(ctx context.Context, tenantID, id uuid.UUID) (Student, error) {
+	row, err := s.queries.GetStudent(ctx, db.GetStudentParams{TenantID: tenantID, ID: id})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Student{}, fmt.Errorf("GetStudent %s: %w", id, ErrNotFound)
+		}
+		return Student{}, fmt.Errorf("store: GetStudent: %w", err)
+	}
+	return studentFromDB(row), nil
+}
+
+// ListSubmissionsByAssessmentVersion returns all submissions for a tenant + avid.
+func (s *Store) ListSubmissionsByAssessmentVersion(ctx context.Context, tenantID, avid uuid.UUID) ([]Submission, error) {
+	rows, err := s.queries.ListSubmissionsByAssessmentVersion(ctx, db.ListSubmissionsByAssessmentVersionParams{
+		TenantID:            tenantID,
+		AssessmentVersionID: uuid.NullUUID{UUID: avid, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("store: ListSubmissionsByAssessmentVersion: %w", err)
+	}
+	result := make([]Submission, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, submissionFromDB(row))
+	}
+	return result, nil
+}
+
+func studentFromDB(r db.Student) Student {
+	return Student{
+		ID:        r.ID,
+		TenantID:  r.TenantID,
+		Email:     r.Email,
+		FullName:  r.FullName,
+		CreatedAt: r.CreatedAt.Time,
+	}
+}

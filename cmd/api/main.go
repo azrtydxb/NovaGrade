@@ -37,6 +37,8 @@ import (
 	"github.com/azrtydxb/novagrade/internal/api"
 	"github.com/azrtydxb/novagrade/internal/auth"
 	"github.com/azrtydxb/novagrade/internal/domain"
+	"github.com/azrtydxb/novagrade/internal/integration"
+	integrationcsv "github.com/azrtydxb/novagrade/internal/integration/csv"
 	"github.com/azrtydxb/novagrade/internal/queue"
 	"github.com/azrtydxb/novagrade/internal/store"
 )
@@ -136,6 +138,27 @@ func main() {
 		DeployMode: deployMode,
 	}
 
+	// ── Integration registry (built-in connectors) ────────────────────────────
+	reg := integration.NewRegistry()
+	integrationcsv.Register(reg)
+
+	ih := &api.IntegrationHandlers{
+		Store:      st,
+		DeployMode: deployMode,
+	}
+
+	roh := &api.RosterHandlers{
+		Store:      st,
+		Registry:   reg,
+		DeployMode: deployMode,
+	}
+
+	crh := &api.ClassResultsHandlers{
+		Store:      st,
+		Objects:    objAdapter,
+		DeployMode: deployMode,
+	}
+
 	// ── Router ────────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -161,6 +184,14 @@ func main() {
 		r.Post("/guides/{id}/lock", gh.LockGuide)
 		// Guide preview (stateless, no store, no provider)
 		r.Post("/guides/preview", gph.Preview)
+		// Integration connection management
+		r.Post("/integrations", ih.UpsertIntegration)
+		r.Get("/integrations", ih.ListIntegrations)
+		r.Delete("/integrations/{id}", ih.DeleteIntegration)
+		// Roster import
+		r.Post("/rosters/import", roh.ImportRoster)
+		// Class-results CSV export
+		r.Get("/assessment-versions/{avid}/results.csv", crh.ClassResultsCSV)
 	})
 
 	addr := getenv("HTTP_ADDR", ":8080")
