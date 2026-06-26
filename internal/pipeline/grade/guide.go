@@ -17,22 +17,83 @@ const rubricPrompt = `You are grading one exam question strictly against the off
 	`"awarded_marks" (number, 0..max), "justification" (one sentence), ` +
 	`"grade_confidence" (0..1).`
 
-// GuideEntry is a single entry in a marking guide JSON file.
+// StepEntry is a single step within a multi_step marking entry.
+// Each step is matched independently against the student answer.
 // Fields:
+//   - Answer:        expected answer string (for exact/exact_ci step match types)
+//   - Accept:        list of acceptable answers (for set step match types)
+//   - Marks:         marks awarded when this step matches
+//   - Match:         step match type: "exact", "exact_ci", "set", or "numeric"
+//   - NumericAnswer: expected numeric value (for numeric step match type)
+//   - Tolerance:     tolerance value for numeric step matching
+//   - ToleranceType: "abs" or "pct" for numeric step matching
+type StepEntry struct {
+	Answer        string   `json:"answer,omitempty"`
+	Accept        []string `json:"accept,omitempty"`
+	Marks         float64  `json:"marks"`
+	Match         string   `json:"match"`
+	NumericAnswer float64  `json:"numeric_answer,omitempty"`
+	Tolerance     float64  `json:"tolerance,omitempty"`
+	ToleranceType string   `json:"tolerance_type,omitempty"`
+}
+
+// CriterionEntry is one sub-criterion within a partial marking entry.
+// Fields:
+//   - Accept: list of acceptable answer fragments (case-insensitive substring match)
+//   - Marks:  marks awarded when any Accept fragment is found in the student answer
+type CriterionEntry struct {
+	Accept []string `json:"accept"`
+	Marks  float64  `json:"marks"`
+}
+
+// GuideEntry is a single entry in a marking guide JSON file.
+//
+// Core fields (all match types):
 //   - MaxMarks: maximum marks for this question (required)
+//   - Match:    match type (see below)
+//
+// Phase-1/2 fields:
 //   - Answer:   expected answer string (used by exact / exact_ci match types)
 //   - Accept:   list of acceptable answers (used by set match type)
 //   - Rubric:   marking rubric prose (used by rubric match type)
-//   - Match:    one of "exact", "exact_ci", "set", "rubric"
+//   - Normalize: when true on exact/exact_ci/set, compare after casefold +
+//               collapsed whitespace + stripped punctuation (default false)
 //
-// Phase-3 match types (partial, method, multi-step, tolerance, units) are
-// recognised as field values but fall through to the fallback MarkScheme.
+// Phase-3 numeric fields (match type "numeric"):
+//   - NumericAnswer: the expected numeric value
+//   - Tolerance:     allowed deviation (default 0)
+//   - ToleranceType: "abs" (absolute, default) or "pct" (percentage)
+//   - Unit:          required unit token (stripped before parsing the number)
+//   - UnitMarks:     marks reserved for the correct unit; when > 0, value-correct
+//                   but unit-wrong/missing awards (MaxMarks - UnitMarks)
+//
+// Phase-3 multi_step fields (match type "multi_step"):
+//   - Steps: ordered list of StepEntry; each step is matched independently,
+//            awarding method marks even when later steps are wrong
+//
+// Phase-3 partial fields (match type "partial"):
+//   - Criteria: list of CriterionEntry; each criterion that matches contributes
+//               its Marks to the total (clamped to MaxMarks)
 type GuideEntry struct {
 	MaxMarks float64  `json:"max_marks"`
 	Answer   string   `json:"answer,omitempty"`
 	Accept   []string `json:"accept,omitempty"`
 	Rubric   string   `json:"rubric,omitempty"`
 	Match    string   `json:"match"`
+	Normalize bool    `json:"normalize,omitempty"`
+
+	// numeric match type fields
+	NumericAnswer float64 `json:"numeric_answer,omitempty"`
+	Tolerance     float64 `json:"tolerance,omitempty"`
+	ToleranceType string  `json:"tolerance_type,omitempty"`
+	Unit          string  `json:"unit,omitempty"`
+	UnitMarks     float64 `json:"unit_marks,omitempty"`
+
+	// multi_step match type fields
+	Steps []StepEntry `json:"steps,omitempty"`
+
+	// partial match type fields
+	Criteria []CriterionEntry `json:"criteria,omitempty"`
 }
 
 // Guide is a map from question_no to its GuideEntry.
@@ -131,23 +192,78 @@ func (g *GuideMarkScheme) Grade(ctx context.Context, q contracts.TranscribedQues
 
 	switch entry.Match {
 	case "exact", "exact_ci", "set":
-		ok := objectiveMatch(entry, strings.TrimSpace(q.StudentAnswer), entry.Match)
-		awarded := 0.0
-		if ok {
-			awarded = maxMarks
+		var awarded float64
+		var justification string
+		var confidence float64
+
+		if entry.Normalize {
+			// Phase-3: normalized wording comparison
+			var awardedN float64
+			awardedN, confidence, justification = MatchObjectiveNormalized(entry, strings.TrimSpace(q.StudentAnswer))
+			awarded = awardedN
+		} else {
+			// Original deterministic string comparison (unchanged behavior)
+			ok := objectiveMatch(entry, strings.TrimSpace(q.StudentAnswer), entry.Match)
+			if ok {
+				awarded = maxMarks
+				justification = "matches marking guide"
+			} else {
+				awarded = 0
+				justification = "does not match marking guide"
+			}
+			confidence = 1.0
 		}
-		justification := "does not match marking guide"
-		if ok {
-			justification = "matches marking guide"
-		}
+
 		return contracts.GradedQuestion{
 			QuestionNo:      q.QuestionNo,
 			Section:         q.Section,
 			MaxMarks:        maxMarks,
-			AwardedMarks:    awarded,
+			AwardedMarks:    clamp(awarded, 0, maxMarks),
 			StudentAnswer:   q.StudentAnswer,
 			Justification:   justification,
-			GradeConfidence: 1.0,
+			GradeConfidence: confidence,
+			Flags:           nonNilFlags(flags),
+		}, nil
+
+	case "numeric":
+		// Phase-3: deterministic numeric matching with tolerance and optional unit marks.
+		awarded, confidence, justification := MatchNumeric(entry, strings.TrimSpace(q.StudentAnswer))
+		return contracts.GradedQuestion{
+			QuestionNo:      q.QuestionNo,
+			Section:         q.Section,
+			MaxMarks:        maxMarks,
+			AwardedMarks:    clamp(awarded, 0, maxMarks),
+			StudentAnswer:   q.StudentAnswer,
+			Justification:   justification,
+			GradeConfidence: confidence,
+			Flags:           nonNilFlags(flags),
+		}, nil
+
+	case "multi_step":
+		// Phase-3: deterministic per-step method marks.
+		awarded, confidence, justification := MatchMultiStep(entry, q.StudentAnswer)
+		return contracts.GradedQuestion{
+			QuestionNo:      q.QuestionNo,
+			Section:         q.Section,
+			MaxMarks:        maxMarks,
+			AwardedMarks:    clamp(awarded, 0, maxMarks),
+			StudentAnswer:   q.StudentAnswer,
+			Justification:   justification,
+			GradeConfidence: confidence,
+			Flags:           nonNilFlags(flags),
+		}, nil
+
+	case "partial":
+		// Phase-3: deterministic per-criterion partial marks.
+		awarded, confidence, justification := MatchPartial(entry, q.StudentAnswer)
+		return contracts.GradedQuestion{
+			QuestionNo:      q.QuestionNo,
+			Section:         q.Section,
+			MaxMarks:        maxMarks,
+			AwardedMarks:    clamp(awarded, 0, maxMarks),
+			StudentAnswer:   q.StudentAnswer,
+			Justification:   justification,
+			GradeConfidence: confidence,
 			Flags:           nonNilFlags(flags),
 		}, nil
 
@@ -163,7 +279,7 @@ func (g *GuideMarkScheme) Grade(ctx context.Context, q contracts.TranscribedQues
 		return awardFromLLM(ctx, g.provider, g.model, prompt, q, maxMarks, flags)
 
 	default:
-		// Unknown match type (incl. Phase-3 types) — defer to fallback.
+		// Unknown match type — defer to fallback (LLMJudge).
 		return g.fallback.Grade(ctx, q)
 	}
 }
