@@ -110,6 +110,7 @@ func (f *FeedbackFakeStore) auditCount() int {
 type FeedbackFakeObjects struct {
 	mu      sync.Mutex
 	objects map[string][]byte
+	failPut bool
 }
 
 func newFeedbackFakeObjects() *FeedbackFakeObjects {
@@ -119,6 +120,9 @@ func newFeedbackFakeObjects() *FeedbackFakeObjects {
 func (f *FeedbackFakeObjects) PutObject(_ context.Context, key string, data []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.failPut {
+		return fmt.Errorf("simulated PutObject failure")
+	}
 	cp := make([]byte, len(data))
 	copy(cp, data)
 	f.objects[key] = cp
@@ -498,4 +502,114 @@ func TestRegenerate_NoReviewFixApprove_404(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusNotFound, rec.Code, "principal without ReviewFixApprove must get 404")
+}
+
+// TestRegenerate_AuditFailure_500 verifies that when InsertAuditEvent returns an
+// error the handler returns 500 and does NOT write/overwrite the graded.v1.json
+// artifact in the object store (audit-first guarantee).
+func TestRegenerate_AuditFailure_500(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeStore := newFeedbackFakeStore()
+	fakeObjects := newFeedbackFakeObjects()
+	fakeProv := &feedbackFakeAIProvider{}
+	registry := buildFeedbackRegistry(fakeProv, "test-model")
+
+	sub := fakeStore.seedSubmission(tenantID, contracts.StateTeacherReview)
+
+	// Seed the graded paper so GetObject succeeds.
+	originalPaper := buildTestGradedPaperForFeedback("original feedback", "original revision")
+	fakeObjects.seedGradedPaper(tenantID, sub.ID, originalPaper)
+
+	// Make InsertAuditEvent fail.
+	fakeStore.failAudit = true
+
+	h := &api.FeedbackHandlers{
+		Store:      fakeStore,
+		Objects:    fakeObjects,
+		Registry:   registry,
+		DeployMode: "onprem",
+	}
+
+	principal := auth.Principal{
+		ID:       "teacher-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodPost,
+		"/v1/submissions/"+sub.ID.String()+"/feedback/regenerate", bytes.NewBufferString("{}"))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildFeedbackRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusInternalServerError, rec.Code, "audit failure must return 500")
+
+	// The artifact in the object store must NOT have been updated (PutObject
+	// was never reached because the handler returned early after audit failure).
+	stored, err := fakeObjects.readGradedPaper(tenantID, sub.ID)
+	require.NoError(t, err, "graded.v1.json must still be readable (original artifact)")
+	require.Len(t, stored.Questions, 1)
+	assert.Equal(t, "original feedback", stored.Questions[0].Feedback,
+		"artifact must retain original feedback — PutObject must not have been called")
+	assert.Equal(t, "original revision", stored.Questions[0].Revision,
+		"artifact must retain original revision — PutObject must not have been called")
+
+	// No audit event must have been recorded (the store rejected the insert).
+	assert.Equal(t, 0, fakeStore.auditCount(), "no audit event must be recorded when insert fails")
+}
+
+// TestRegenerate_PutObjectFailure_500 verifies that when PutObject returns an
+// error the handler returns 500. The graded.v1.json in the fake object store
+// should remain at its pre-request content (PutObject itself rejected the write).
+func TestRegenerate_PutObjectFailure_500(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeStore := newFeedbackFakeStore()
+	fakeObjects := newFeedbackFakeObjects()
+	fakeProv := &feedbackFakeAIProvider{}
+	registry := buildFeedbackRegistry(fakeProv, "test-model")
+
+	sub := fakeStore.seedSubmission(tenantID, contracts.StateTeacherReview)
+
+	// Seed the graded paper so GetObject succeeds.
+	originalPaper := buildTestGradedPaperForFeedback("old feedback", "old revision")
+	fakeObjects.seedGradedPaper(tenantID, sub.ID, originalPaper)
+
+	// Allow audit to succeed but make PutObject fail.
+	fakeObjects.failPut = true
+
+	h := &api.FeedbackHandlers{
+		Store:      fakeStore,
+		Objects:    fakeObjects,
+		Registry:   registry,
+		DeployMode: "onprem",
+	}
+
+	principal := auth.Principal{
+		ID:       "teacher-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodPost,
+		"/v1/submissions/"+sub.ID.String()+"/feedback/regenerate", bytes.NewBufferString("{}"))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildFeedbackRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusInternalServerError, rec.Code, "PutObject failure must return 500")
+
+	// The audit event was written (audit-first) even though PutObject failed —
+	// this is the documented orphan-audit trade-off.
+	assert.Equal(t, 1, fakeStore.auditCount(),
+		"audit event must have been written before PutObject was attempted")
 }

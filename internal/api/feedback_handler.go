@@ -83,7 +83,11 @@ func (h *FeedbackHandlers) Regenerate(w http.ResponseWriter, r *http.Request) {
 	prov, model := h.Registry.Resolve(r.Context(), tenantID)
 
 	// Load the graded artifact.
-	objectKey := fmt.Sprintf("%s/%s/graded.v1.json", sub.TenantID, sub.ID)
+	// Use tenantID (the parsed uuid.UUID from fetchAndAuthorize) rather than
+	// sub.TenantID (raw string from the DB row) so that key formatting is
+	// always normalised to the canonical UUID string representation, matching
+	// whatever the pipeline worker wrote.
+	objectKey := fmt.Sprintf("%s/%s/graded.v1.json", tenantID, sub.ID)
 	data, err := h.Objects.GetObject(r.Context(), objectKey)
 	if err != nil {
 		http.Error(w, "graded artifact not available (server error)", http.StatusInternalServerError)
@@ -122,6 +126,10 @@ func (h *FeedbackHandlers) Regenerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Audit-first: write audit event BEFORE the object store write.
+	// Trade-off: if PutObject subsequently fails (see below), the audit row
+	// remains as an orphan. This is intentional — the audit row documents the
+	// intent to regenerate. Retrying is safe because questions are cleared
+	// fresh each time; the orphaned audit row does not cause data corruption.
 	subID := sub.ID
 	_, err = h.Store.InsertAuditEvent(r.Context(), store.InsertAuditEventParams{
 		TenantID:   tenantID,
@@ -138,6 +146,10 @@ func (h *FeedbackHandlers) Regenerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Write the updated paper back to the object store.
+	// If PutObject fails, the caller receives 500. The audit row written above
+	// becomes an orphan but does not corrupt state — the graded.v1.json in the
+	// object store retains its pre-regeneration content, so a retry will
+	// produce a consistent outcome.
 	updated, err := json.Marshal(paper)
 	if err != nil {
 		http.Error(w, "failed to marshal updated paper", http.StatusInternalServerError)
