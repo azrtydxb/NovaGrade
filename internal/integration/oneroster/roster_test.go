@@ -2,48 +2,83 @@ package oneroster_test
 
 import (
 	"context"
+	"io"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/azrtydxb/novagrade/internal/integration/oneroster"
+	"github.com/azrtydxb/novagrade/pkg/contracts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestOneRosterConnector_ImportRoster_StudentsOnly(t *testing.T) {
-	f, err := os.Open("testdata/oneroster_users.csv")
-	require.NoError(t, err)
-	defer f.Close()
+func TestRosterConnector_ImportRoster(t *testing.T) {
+	tests := []struct {
+		name         string
+		readerFn     func(t *testing.T) io.Reader
+		wantErr      bool
+		errContains  string
+		wantLen      int
+		wantStudents []contracts.RosterStudent
+	}{
+		{
+			name: "students only — role filtering and email fallback",
+			readerFn: func(t *testing.T) io.Reader {
+				f, err := os.Open("testdata/oneroster_users.csv")
+				require.NoError(t, err)
+				t.Cleanup(func() { f.Close() })
+				return f
+			},
+			wantLen: 3,
+			// only 3 students expected (teacher and admin filtered out)
+			wantStudents: []contracts.RosterStudent{
+				{Email: "alice@school.edu", FullName: "Alice Smith", ExternalID: "s001", ClassLabel: ""},
+				{Email: "carol@school.edu", FullName: "Carol White", ExternalID: "s002"},
+				// dave (s003) — empty email, falls back to username
+				{Email: "dave_b", FullName: "Dave Brown", ExternalID: "s003"},
+			},
+		},
+		{
+			name: "missing required header",
+			readerFn: func(t *testing.T) io.Reader {
+				return strings.NewReader("username,givenName,familyName\nalice,Alice,Smith\n")
+			},
+			wantErr:     true,
+			errContains: "missing required column",
+		},
+	}
 
-	conn := oneroster.RosterConnector{}
-	students, err := conn.ImportRoster(context.Background(), f)
-	require.NoError(t, err)
-	require.Len(t, students, 3, "only 3 students expected (teacher and admin filtered out)")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conn := oneroster.RosterConnector{}
+			students, err := conn.ImportRoster(context.Background(), tc.readerFn(t))
 
-	// alice (s001)
-	assert.Equal(t, "alice@school.edu", students[0].Email)
-	assert.Equal(t, "Alice Smith", students[0].FullName)
-	assert.Equal(t, "s001", students[0].ExternalID)
-	assert.Empty(t, students[0].ClassLabel)
+			if tc.wantErr {
+				require.Error(t, err)
+				if tc.errContains != "" {
+					assert.Contains(t, err.Error(), tc.errContains)
+				}
+				assert.Nil(t, students)
+				return
+			}
 
-	// carol (s002) — role "Student" (mixed case)
-	assert.Equal(t, "carol@school.edu", students[1].Email)
-	assert.Equal(t, "Carol White", students[1].FullName)
-	assert.Equal(t, "s002", students[1].ExternalID)
+			require.NoError(t, err)
+			if tc.wantLen > 0 {
+				require.Len(t, students, tc.wantLen)
+			}
 
-	// dave (s003) — empty email, falls back to username
-	assert.Equal(t, "dave_b", students[2].Email)
-	assert.Equal(t, "Dave Brown", students[2].FullName)
-	assert.Equal(t, "s003", students[2].ExternalID)
-}
-
-func TestOneRosterConnector_ImportRoster_MissingRequiredHeader(t *testing.T) {
-	csv := "username,givenName,familyName\nalice,Alice,Smith\n"
-	conn := oneroster.RosterConnector{}
-	students, err := conn.ImportRoster(context.Background(), strings.NewReader(csv))
-
-	require.Error(t, err)
-	assert.Nil(t, students)
-	assert.Contains(t, err.Error(), "missing required column")
+			for i, want := range tc.wantStudents {
+				if i >= len(students) {
+					break
+				}
+				assert.Equal(t, want.Email, students[i].Email)
+				assert.Equal(t, want.FullName, students[i].FullName)
+				assert.Equal(t, want.ExternalID, students[i].ExternalID)
+				if want.ClassLabel != "" {
+					assert.Equal(t, want.ClassLabel, students[i].ClassLabel)
+				}
+			}
+		})
+	}
 }

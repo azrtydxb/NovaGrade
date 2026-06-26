@@ -6,61 +6,90 @@ import (
 	"testing"
 
 	csvconn "github.com/azrtydxb/novagrade/internal/integration/csv"
+	"github.com/azrtydxb/novagrade/pkg/contracts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestRosterConnector_ImportRoster_HappyPath(t *testing.T) {
-	f, err := os.Open("testdata/roster.csv")
-	require.NoError(t, err)
-	defer f.Close()
+func TestRosterConnector_ImportRoster(t *testing.T) {
+	tests := []struct {
+		name          string
+		file          string
+		wantErr       bool
+		errContains   string
+		wantStudents  []contracts.RosterStudent
+		wantLen       int
+	}{
+		{
+			name:    "happy path",
+			file:    "testdata/roster.csv",
+			wantLen: 3,
+			wantStudents: []contracts.RosterStudent{
+				{Email: "alice@example.com", FullName: "Alice Smith", ClassLabel: "10A"},
+				{Email: "bob@example.com", FullName: "Bob Jones", ClassLabel: "10B"},
+				{Email: "carol@example.com", FullName: "Carol White", ClassLabel: "11A"},
+			},
+		},
+		{
+			name:        "malformed rows",
+			file:        "testdata/roster_malformed.csv",
+			wantErr:     true,
+			errContains: "skipped",
+			wantLen:     2,
+			wantStudents: []contracts.RosterStudent{
+				{Email: "good@example.com"},
+				{Email: "another@example.com"},
+			},
+		},
+		{
+			name:        "missing header",
+			file:        "testdata/roster_noheader.csv",
+			wantErr:     true,
+			errContains: "header",
+		},
+	}
 
-	conn := csvconn.RosterConnector{}
-	students, err := conn.ImportRoster(context.Background(), f)
-	require.NoError(t, err)
-	require.Len(t, students, 3)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := os.Open(tc.file)
+			require.NoError(t, err)
+			defer f.Close()
 
-	assert.Equal(t, "alice@example.com", students[0].Email)
-	assert.Equal(t, "Alice Smith", students[0].FullName)
-	assert.Equal(t, "10A", students[0].ClassLabel)
+			conn := csvconn.RosterConnector{}
+			students, err := conn.ImportRoster(context.Background(), f)
 
-	assert.Equal(t, "bob@example.com", students[1].Email)
-	assert.Equal(t, "Bob Jones", students[1].FullName)
-	assert.Equal(t, "10B", students[1].ClassLabel)
+			if tc.wantErr {
+				require.Error(t, err)
+				if tc.errContains != "" {
+					assert.Contains(t, err.Error(), tc.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+			}
 
-	assert.Equal(t, "carol@example.com", students[2].Email)
-	assert.Equal(t, "Carol White", students[2].FullName)
-	assert.Equal(t, "11A", students[2].ClassLabel)
-}
+			if tc.wantStudents == nil && !tc.wantErr {
+				assert.Nil(t, students)
+				return
+			}
 
-func TestRosterConnector_ImportRoster_MalformedRows(t *testing.T) {
-	f, err := os.Open("testdata/roster_malformed.csv")
-	require.NoError(t, err)
-	defer f.Close()
+			if tc.wantLen > 0 {
+				require.Len(t, students, tc.wantLen)
+			}
 
-	conn := csvconn.RosterConnector{}
-	students, err := conn.ImportRoster(context.Background(), f)
-
-	// Should return 2 valid students and a non-nil error.
-	require.Error(t, err)
-	require.Len(t, students, 2)
-
-	assert.Equal(t, "good@example.com", students[0].Email)
-	assert.Equal(t, "another@example.com", students[1].Email)
-
-	// Error should mention the skipped rows.
-	assert.Contains(t, err.Error(), "skipped")
-}
-
-func TestRosterConnector_ImportRoster_MissingHeader(t *testing.T) {
-	f, err := os.Open("testdata/roster_noheader.csv")
-	require.NoError(t, err)
-	defer f.Close()
-
-	conn := csvconn.RosterConnector{}
-	students, err := conn.ImportRoster(context.Background(), f)
-
-	require.Error(t, err)
-	assert.Nil(t, students)
-	assert.Contains(t, err.Error(), "header")
+			for i, want := range tc.wantStudents {
+				if i >= len(students) {
+					break
+				}
+				if want.Email != "" {
+					assert.Equal(t, want.Email, students[i].Email)
+				}
+				if want.FullName != "" {
+					assert.Equal(t, want.FullName, students[i].FullName)
+				}
+				if want.ClassLabel != "" {
+					assert.Equal(t, want.ClassLabel, students[i].ClassLabel)
+				}
+			}
+		})
+	}
 }

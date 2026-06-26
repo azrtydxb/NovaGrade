@@ -59,10 +59,25 @@ func (c RosterConnector) ImportRoster(_ context.Context, r io.Reader) ([]contrac
 	familyNameIdx := colIndex["familyname"]
 	roleIdx := colIndex["role"]
 
+	// Resolve optional column indices once before the loop.
+	emailIdx := -1
+	if hasEmail {
+		emailIdx = colIndex["email"]
+	}
+	usernameIdx := -1
+	if hasUsername {
+		usernameIdx = colIndex["username"]
+	}
+
+	headerLen := len(header)
 	var students []contracts.RosterStudent
 
 	for _, row := range records[1:] {
 		if len(row) == 0 {
+			continue
+		}
+		// Skip malformed rows that are shorter than the header.
+		if len(row) < headerLen {
 			continue
 		}
 
@@ -88,15 +103,11 @@ func (c RosterConnector) ImportRoster(_ context.Context, r io.Reader) ([]contrac
 		}
 
 		email := ""
-		if hasEmail {
-			if emailIdx := colIndex["email"]; emailIdx < len(row) {
-				email = strings.TrimSpace(row[emailIdx])
-			}
+		if emailIdx >= 0 && emailIdx < len(row) {
+			email = strings.TrimSpace(row[emailIdx])
 		}
-		if email == "" && hasUsername {
-			if usernameIdx := colIndex["username"]; usernameIdx < len(row) {
-				email = strings.TrimSpace(row[usernameIdx])
-			}
+		if email == "" && usernameIdx >= 0 && usernameIdx < len(row) {
+			email = strings.TrimSpace(row[usernameIdx])
 		}
 
 		students = append(students, contracts.RosterStudent{
