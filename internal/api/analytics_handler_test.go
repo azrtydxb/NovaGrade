@@ -9,7 +9,6 @@ package api_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -135,7 +134,7 @@ func TestGetAnalytics_OK(t *testing.T) {
 	assert.Equal(t, 4, resp.TotalCount, "four total (3 graded + 1 ungraded)")
 	assert.NotEmpty(t, resp.ItemAnalysis, "item_analysis must be populated")
 	assert.NotNil(t, resp.Distribution, "distribution must be present")
-	distCount, _ := resp.Distribution["Count"].(float64)
+	distCount, _ := resp.Distribution["count"].(float64)
 	assert.Equal(t, float64(3), distCount, "distribution.count must equal graded_count")
 	assert.NotNil(t, resp.FlagFrequencies, "flag_frequencies must be non-nil")
 }
@@ -339,5 +338,3 @@ func TestGetOverrideStats_CrossTenant(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, rec.Code, "cross-tenant must return 404, body: %s", rec.Body.String())
 }
 
-// Ensure the unused fmt import doesn't cause compile errors in this file.
-var _ = fmt.Sprintf

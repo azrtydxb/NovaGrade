@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"math"
 	"net/http"
 
@@ -58,10 +59,14 @@ type overrideStatsResponse struct {
 	MeanAbsDelta         float64 `json:"mean_abs_delta"`
 }
 
-// GetAnalytics handles GET /v1/assessment-versions/{avid}/analytics.
-func (h *AnalyticsHandlers) GetAnalytics(w http.ResponseWriter, r *http.Request) {
-	p, ok := auth.PrincipalFromContext(r.Context())
-	if !ok {
+// resolveAVID extracts and validates the principal, enforces RBAC, parses
+// tenantID and avid URL params, fetches submissions, and performs the
+// cross-tenant 404 check. On any failure it writes the appropriate HTTP
+// response and returns ok=false. Security semantics are preserved exactly:
+// RBAC denial → 404, cross-tenant avid → 404.
+func (h *AnalyticsHandlers) resolveAVID(w http.ResponseWriter, r *http.Request) (tenantID uuid.UUID, avid uuid.UUID, subs []store.Submission, ok bool) {
+	p, pok := auth.PrincipalFromContext(r.Context())
+	if !pok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -74,20 +79,21 @@ func (h *AnalyticsHandlers) GetAnalytics(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	tenantID, err := uuid.Parse(p.TenantID)
+	var err error
+	tenantID, err = uuid.Parse(p.TenantID)
 	if err != nil {
 		http.Error(w, "invalid tenant", http.StatusBadRequest)
 		return
 	}
 
 	avidStr := chi.URLParam(r, "avid")
-	avid, err := uuid.Parse(avidStr)
+	avid, err = uuid.Parse(avidStr)
 	if err != nil {
 		http.Error(w, "invalid assessment_version_id", http.StatusBadRequest)
 		return
 	}
 
-	subs, err := h.Store.ListSubmissionsByAssessmentVersion(r.Context(), tenantID, avid)
+	subs, err = h.Store.ListSubmissionsByAssessmentVersion(r.Context(), tenantID, avid)
 	if err != nil {
 		http.Error(w, "store error", http.StatusInternalServerError)
 		return
@@ -101,6 +107,17 @@ func (h *AnalyticsHandlers) GetAnalytics(w http.ResponseWriter, r *http.Request)
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
+	}
+
+	ok = true
+	return
+}
+
+// GetAnalytics handles GET /v1/assessment-versions/{avid}/analytics.
+func (h *AnalyticsHandlers) GetAnalytics(w http.ResponseWriter, r *http.Request) {
+	tenantID, _, subs, ok := h.resolveAVID(w, r)
+	if !ok {
+		return
 	}
 
 	// Collect effective graded papers; skip submissions without a graded artifact.
@@ -148,46 +165,9 @@ func (h *AnalyticsHandlers) GetAnalytics(w http.ResponseWriter, r *http.Request)
 
 // GetOverrideStats handles GET /v1/assessment-versions/{avid}/override-stats.
 func (h *AnalyticsHandlers) GetOverrideStats(w http.ResponseWriter, r *http.Request) {
-	p, ok := auth.PrincipalFromContext(r.Context())
+	tenantID, _, subs, ok := h.resolveAVID(w, r)
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
-	}
-	rctx := domain.ResourceCtx{
-		PrincipalTenants: []string{p.TenantID},
-		ResourceTenantID: p.TenantID,
-		DeployMode:       h.DeployMode,
-	}
-	if !domain.Can(p.Roles, domain.ActionViewResults, rctx) {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	tenantID, err := uuid.Parse(p.TenantID)
-	if err != nil {
-		http.Error(w, "invalid tenant", http.StatusBadRequest)
-		return
-	}
-
-	avidStr := chi.URLParam(r, "avid")
-	avid, err := uuid.Parse(avidStr)
-	if err != nil {
-		http.Error(w, "invalid assessment_version_id", http.StatusBadRequest)
-		return
-	}
-
-	subs, err := h.Store.ListSubmissionsByAssessmentVersion(r.Context(), tenantID, avid)
-	if err != nil {
-		http.Error(w, "store error", http.StatusInternalServerError)
-		return
-	}
-
-	// Cross-tenant 404 check.
-	if len(subs) == 0 {
-		ownerTenantID, lookupErr := h.Store.GetAssessmentVersionTenantID(r.Context(), avid)
-		if lookupErr == nil && ownerTenantID != tenantID {
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
 	}
 
 	var totalGradedQuestions int
@@ -205,6 +185,7 @@ func (h *AnalyticsHandlers) GetOverrideStats(w http.ResponseWriter, r *http.Requ
 		// Fetch audit events for this submission.
 		events, err := h.Store.ListAuditEventsBySubmission(r.Context(), tenantID, sub.ID)
 		if err != nil {
+			log.Printf("override-stats: audit fetch failed for submission %s: %v", sub.ID, err)
 			continue
 		}
 

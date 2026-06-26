@@ -19,13 +19,13 @@ import (
 // QuestionStat holds per-question aggregate statistics computed by
 // [ItemAnalysis].
 type QuestionStat struct {
-	QuestionNo   string
-	Responses    int     // number of papers that contained this question
-	MaxMarks     float64 // first-seen MaxMarks across all papers (see MaxMarks policy below)
-	MeanAwarded  float64 // arithmetic mean of AwardedMarks
-	Difficulty   float64 // MeanAwarded / MaxMarks; 0 if MaxMarks == 0
-	PctFullMarks float64 // fraction of responses where AwardedMarks == MaxMarks
-	PctZero      float64 // fraction of responses where AwardedMarks == 0
+	QuestionNo   string  `json:"question_no"`
+	Responses    int     `json:"responses"`    // number of papers that contained this question
+	MaxMarks     float64 `json:"max_marks"`    // first-seen MaxMarks across all papers (see MaxMarks policy below)
+	MeanAwarded  float64 `json:"mean_awarded"` // arithmetic mean of AwardedMarks
+	Difficulty   float64 `json:"difficulty"`   // MeanAwarded / MaxMarks; 0 if MaxMarks == 0
+	PctFullMarks float64 `json:"pct_full_marks"` // fraction of responses where AwardedMarks == MaxMarks
+	PctZero      float64 `json:"pct_zero"`       // fraction of responses where AwardedMarks == 0
 	// Discrimination is the Pearson correlation coefficient between each
 	// student's AwardedMarks on this question and their paper Total.
 	//
@@ -42,27 +42,27 @@ type QuestionStat struct {
 	// This is equivalent to Cov(x,y) / (σ_x * σ_y) using population statistics.
 	//
 	// Guard conditions: if N < 2, or σ_x == 0, or σ_y == 0, Discrimination = 0.
-	Discrimination float64
+	Discrimination float64 `json:"discrimination"`
 }
 
 // Bucket is a single histogram bar in [Distribution].
 type Bucket struct {
-	Label string  // e.g. "0-9", "10-19", …, "90-100"
-	Lo    float64 // inclusive lower bound
-	Hi    float64 // inclusive upper bound (last bucket) or exclusive (others)
-	Count int
+	Label string  `json:"label"` // e.g. "0-9", "10-19", …, "90-100"
+	Lo    float64 `json:"lo"`    // inclusive lower bound
+	Hi    float64 `json:"hi"`    // inclusive upper bound (last bucket) or exclusive (others)
+	Count int     `json:"count"`
 }
 
 // Distribution holds the grade histogram and descriptive statistics computed
 // by [GradeDistribution].
 type Distribution struct {
-	Buckets []Bucket
-	Mean    float64
-	Median  float64
-	StdDev  float64
-	Min     float64
-	Max     float64
-	Count   int
+	Buckets []Bucket `json:"buckets"`
+	Mean    float64  `json:"mean"`
+	Median  float64  `json:"median"`
+	StdDev  float64  `json:"std_dev"`
+	Min     float64  `json:"min"`
+	Max     float64  `json:"max"`
+	Count   int      `json:"count"`
 }
 
 // ---------------------------------------------------------------------------
