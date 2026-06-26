@@ -423,7 +423,7 @@ func (s *Store) InsertFinalGrade(ctx context.Context, p InsertFinalGradeParams) 
 		Score100:     p.Score100,
 		GradedKey:    p.GradedKey,
 		ApprovedBy:   p.ApprovedBy,
-		ApprovedAt:   p.ApprovedAt,
+		ApprovedAt:   pgtype.Timestamptz{Time: p.ApprovedAt, Valid: true},
 	})
 	if err != nil {
 		return FinalGrade{}, fmt.Errorf("store: InsertFinalGrade: %w", err)
@@ -575,7 +575,7 @@ func finalGradeFromInsertRow(r db.InsertFinalGradeRow) FinalGrade {
 		Score100:     r.Score100,
 		GradedKey:    r.GradedKey,
 		ApprovedBy:   r.ApprovedBy,
-		ApprovedAt:   r.ApprovedAt,
+		ApprovedAt:   r.ApprovedAt.Time,
 		CreatedAt:    r.CreatedAt.Time,
 	}
 }
@@ -591,7 +591,7 @@ func finalGradeFromGetRow(r db.GetFinalGradeRow) FinalGrade {
 		Score100:     r.Score100,
 		GradedKey:    r.GradedKey,
 		ApprovedBy:   r.ApprovedBy,
-		ApprovedAt:   r.ApprovedAt,
+		ApprovedAt:   r.ApprovedAt.Time,
 		CreatedAt:    r.CreatedAt.Time,
 	}
 }

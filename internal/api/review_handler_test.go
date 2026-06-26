@@ -178,8 +178,8 @@ func makeGradedPaper(t *testing.T, fakeObjects *FakeObjectStore, tenantID, subID
 		Subject:   "Maths",
 		SourcePDF: "source.pdf",
 		Questions: []contracts.GradedQuestion{
-			{QuestionNo: "1", MaxMarks: 10, AwardedMarks: 7, Justification: "Good", GradeConfidence: 0.9, Flags: []string{}},
-			{QuestionNo: "2", MaxMarks: 5, AwardedMarks: 3, Justification: "Partial", GradeConfidence: 0.8, Flags: []string{}},
+			{QuestionNo: "1", MaxMarks: 10, AwardedMarks: 7, Justification: "Good", Feedback: "AI feedback q1", GradeConfidence: 0.9, Flags: []string{}},
+			{QuestionNo: "2", MaxMarks: 5, AwardedMarks: 3, Justification: "Partial", Feedback: "AI feedback q2", GradeConfidence: 0.8, Flags: []string{}},
 		},
 		Total:    10,
 		MaxTotal: 15,
@@ -243,11 +243,14 @@ func TestPatchQuestion_Override(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	// Returned question should reflect the new marks.
+	// Returned question should reflect the new marks and feedback.
 	var q contracts.GradedQuestion
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &q))
 	assert.Equal(t, "1", q.QuestionNo)
 	assert.Equal(t, 8.0, q.AwardedMarks)
+	// Override feedback lands in Feedback field; Justification must remain immutable.
+	assert.Equal(t, "Good work", q.Feedback, "teacher feedback must land in Feedback field")
+	assert.Equal(t, "Good", q.Justification, "Justification must remain the original grader rationale")
 
 	// teacher_review row must be recorded.
 	require.Equal(t, 1, fakeReviewStore.reviewCount())
@@ -669,7 +672,7 @@ func TestGetReview_OverlaysLatestOverride(t *testing.T) {
 	}
 	require.NotNil(t, q1)
 	assert.Equal(t, 9.0, q1.AwardedMarks)
-	assert.Equal(t, "Second override", q1.Justification)
+	assert.Equal(t, "Second override", q1.Feedback)
 
 	// question "2" should still have the original marks.
 	var q2 *contracts.GradedQuestion

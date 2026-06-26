@@ -906,8 +906,8 @@ func TestApprove_Idempotent(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	// No second audit event or FinalGrade must be written.
-	assert.Equal(t, 0, fakeApprovalStore.auditCount(), "idempotent path must not write a second audit event")
+	// Idempotent path: one audit event (approve re-publish) but no second FinalGrade.
+	assert.Equal(t, 1, fakeApprovalStore.auditCount(), "idempotent path must write one audit event")
 	assert.Equal(t, 0, fakeApprovalStore.finalGradeCount(), "idempotent path must not write a second FinalGrade")
 
 	// The approve command MUST be re-published.

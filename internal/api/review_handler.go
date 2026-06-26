@@ -19,7 +19,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -27,7 +26,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/azrtydxb/novagrade/internal/auth"
-	"github.com/azrtydxb/novagrade/internal/domain"
 	"github.com/azrtydxb/novagrade/internal/store"
 	"github.com/azrtydxb/novagrade/pkg/contracts"
 )
@@ -77,36 +75,8 @@ func (h *ReviewHandlers) GetReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
-		return
-	}
-
-	sub, err := h.Store.GetSubmission(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "store error", http.StatusInternalServerError)
-		return
-	}
-
-	rctx := domain.ResourceCtx{
-		PrincipalTenants: []string{p.TenantID},
-		ResourceTenantID: sub.TenantID.String(),
-		DeployMode:       h.DeployMode,
-	}
-	if !domain.Can(p.Roles, domain.ActionReviewFixApprove, rctx) {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
-	tenantID, err := uuid.Parse(p.TenantID)
-	if err != nil {
-		http.Error(w, "invalid tenant", http.StatusBadRequest)
+	sub, tenantID, ok := fetchAndAuthorize(w, r, p, h.Store, actionReviewFixApprove, h.DeployMode)
+	if !ok {
 		return
 	}
 
@@ -167,48 +137,20 @@ func (h *ReviewHandlers) PatchQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
-		return
-	}
-
 	qno := chi.URLParam(r, "qno")
 	if qno == "" {
 		http.Error(w, "missing question number", http.StatusBadRequest)
 		return
 	}
 
-	sub, err := h.Store.GetSubmission(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "store error", http.StatusInternalServerError)
+	sub, tenantID, ok := fetchAndAuthorize(w, r, p, h.Store, actionReviewFixApprove, h.DeployMode)
+	if !ok {
 		return
 	}
 
-	rctx := domain.ResourceCtx{
-		PrincipalTenants: []string{p.TenantID},
-		ResourceTenantID: sub.TenantID.String(),
-		DeployMode:       h.DeployMode,
-	}
-	if !domain.Can(p.Roles, domain.ActionReviewFixApprove, rctx) {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
-	// Locked check: only override in teacher_review state.
+	// Locked check: only override in teacher_review state (404 before 409 via fetchAndAuthorize).
 	if sub.State != contracts.StateTeacherReview {
 		http.Error(w, "submission is locked (not in teacher_review)", http.StatusConflict)
-		return
-	}
-
-	tenantID, err := uuid.Parse(p.TenantID)
-	if err != nil {
-		http.Error(w, "invalid tenant", http.StatusBadRequest)
 		return
 	}
 
@@ -271,8 +213,8 @@ func (h *ReviewHandlers) PatchQuestion(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Determine feedback string.
-	newFeedback := currentQ.Justification
+	// Determine feedback string (operates on Feedback field; Justification is immutable).
+	newFeedback := currentQ.Feedback
 	if body.Feedback != nil {
 		newFeedback = *body.Feedback
 	}
@@ -282,16 +224,16 @@ func (h *ReviewHandlers) PatchQuestion(w http.ResponseWriter, r *http.Request) {
 		comment = *body.Comment
 	}
 
-	// Serialize old/new for audit trail.
+	// Serialize old/new for audit trail (feedback field, not justification).
 	oldValueJSON, _ := json.Marshal(map[string]interface{}{
 		"question_no":   qno,
 		"awarded_marks": oldMarks,
-		"justification": currentQ.Justification,
+		"feedback":      currentQ.Feedback,
 	})
 	newValueJSON, _ := json.Marshal(map[string]interface{}{
 		"question_no":   qno,
 		"awarded_marks": newMarks,
-		"justification": newFeedback,
+		"feedback":      newFeedback,
 	})
 
 	// Write audit event FIRST — it gates the override.
@@ -331,10 +273,10 @@ func (h *ReviewHandlers) PatchQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build the returned effective question.
+	// Build the returned effective question (Feedback updated; Justification unchanged).
 	updatedQ := currentQ
 	updatedQ.AwardedMarks = newMarks
-	updatedQ.Justification = newFeedback
+	updatedQ.Feedback = newFeedback
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(updatedQ)
@@ -358,6 +300,8 @@ func overlayReviews(paper contracts.GradedPaper, reviews []store.TeacherReview) 
 	}
 
 	// Apply overrides in order; later entries overwrite earlier ones.
+	// Marks overlay onto AwardedMarks; feedback overlay onto Feedback (NOT Justification).
+	// Justification (grader rationale) is left immutable by the override path.
 	for _, r := range reviews {
 		i, ok := idx[r.QuestionNo]
 		if !ok {
@@ -365,7 +309,7 @@ func overlayReviews(paper contracts.GradedPaper, reviews []store.TeacherReview) 
 		}
 		paper.Questions[i].AwardedMarks = r.NewMarks
 		if r.Feedback != "" {
-			paper.Questions[i].Justification = r.Feedback
+			paper.Questions[i].Feedback = r.Feedback
 		}
 	}
 

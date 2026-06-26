@@ -119,7 +119,7 @@ func (h *ExportHandlers) ExportCSV(w http.ResponseWriter, r *http.Request) {
 			formatFloat(q.MaxMarks),
 			formatFloat(q.AwardedMarks),
 			formatFloat(q.GradeConfidence),
-			q.Justification,
+			q.Feedback,
 			flagsCell,
 		})
 	}

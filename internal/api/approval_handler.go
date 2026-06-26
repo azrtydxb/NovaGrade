@@ -83,10 +83,23 @@ func (h *ApprovalHandlers) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Idempotent path: if a FinalGrade already exists, re-publish and return it.
+	// Idempotent path: if a FinalGrade already exists, audit + re-publish and return it.
 	existingFG, err := h.Store.GetFinalGrade(r.Context(), tenantID, sub.ID)
 	if err == nil {
-		// FinalGrade already exists — idempotent retry: re-publish and return existing.
+		// FinalGrade already exists — idempotent retry: audit first, then re-publish.
+		subID := sub.ID
+		_, auditErr := h.Store.InsertAuditEvent(r.Context(), store.InsertAuditEventParams{
+			TenantID:   tenantID,
+			EntityType: "submission",
+			EntityID:   &subID,
+			Actor:      p.ID,
+			Action:     "approve",
+			Reason:     "idempotent re-publish: FinalGrade already exists",
+		})
+		if auditErr != nil {
+			http.Error(w, "store error (audit)", http.StatusInternalServerError)
+			return
+		}
 		env := contracts.Envelope{
 			TenantID:      sub.TenantID.String(),
 			Principal:     p.ID,

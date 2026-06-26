@@ -155,6 +155,7 @@ func makeGradedPaperWithFlags(t *testing.T, fakeObjects *FakeObjectStore, key st
 				MaxMarks:        10,
 				AwardedMarks:    7,
 				Justification:   "Good work",
+				Feedback:        "AI feedback q1",
 				GradeConfidence: 0.9,
 				Flags:           []string{"partial", "check"},
 			},
@@ -164,6 +165,7 @@ func makeGradedPaperWithFlags(t *testing.T, fakeObjects *FakeObjectStore, key st
 				MaxMarks:        5,
 				AwardedMarks:    3,
 				Justification:   "Partial",
+				Feedback:        "AI feedback q2",
 				GradeConfidence: 0.8,
 				Flags:           []string{},
 			},
@@ -245,13 +247,14 @@ func TestExportCSV_LiveGradedWithOverride(t *testing.T) {
 	// Two data rows.
 	require.Len(t, rows, 3, "header + 2 questions")
 
-	// Question 1: override applied → 9.0 marks.
+	// Question 1: override applied → 9.0 marks, feedback column reflects Feedback field.
 	q1 := rows[1]
-	assert.Equal(t, "1", q1[0])       // question_no
-	assert.Equal(t, "algebra", q1[1]) // section
-	assert.Equal(t, "10", q1[2])      // max_marks
-	assert.Equal(t, "9", q1[3])       // awarded_marks (overridden)
-	assert.Equal(t, "partial;check", q1[6]) // flags (index 6)
+	assert.Equal(t, "1", q1[0])                // question_no
+	assert.Equal(t, "algebra", q1[1])           // section
+	assert.Equal(t, "10", q1[2])                // max_marks
+	assert.Equal(t, "9", q1[3])                 // awarded_marks (overridden)
+	assert.Equal(t, "Revised: excellent", q1[5]) // feedback column reflects Feedback (not Justification)
+	assert.Equal(t, "partial;check", q1[6])     // flags (index 6)
 
 	// Question 2: no override → original 3.0.
 	q2 := rows[2]

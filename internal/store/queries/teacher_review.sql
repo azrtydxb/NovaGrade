@@ -21,4 +21,4 @@ SELECT
 FROM teacher_review
 WHERE tenant_id     = $1
   AND submission_id = $2
-ORDER BY created_at ASC;
+ORDER BY created_at ASC, id ASC;
