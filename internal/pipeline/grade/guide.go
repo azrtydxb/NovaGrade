@@ -289,18 +289,37 @@ func (g *GuideMarkScheme) Grade(ctx context.Context, q contracts.TranscribedQues
 
 // objectiveMatch performs a deterministic string comparison between answer and
 // the guide entry according to the match type.
+//
+// Guard: if the guide's expected answer/accept is empty, an empty student answer
+// must NOT count as a match (returns false). This prevents a misconfigured guide
+// from awarding marks to every blank submission.
 func objectiveMatch(entry GuideEntry, answer, match string) bool {
 	switch match {
 	case "set":
 		for _, a := range entry.Accept {
-			if strings.EqualFold(answer, strings.TrimSpace(a)) {
+			expected := strings.TrimSpace(a)
+			// Guard: empty guide accept value must never match (even an empty student answer).
+			if expected == "" {
+				continue
+			}
+			if strings.EqualFold(answer, expected) {
 				return true
 			}
 		}
 		return false
 	case "exact_ci":
-		return strings.EqualFold(answer, strings.TrimSpace(entry.Answer))
+		expected := strings.TrimSpace(entry.Answer)
+		// Guard: empty guide answer must never match anything, including an empty student answer.
+		if expected == "" {
+			return false
+		}
+		return strings.EqualFold(answer, expected)
 	default: // "exact"
-		return answer == strings.TrimSpace(entry.Answer)
+		expected := strings.TrimSpace(entry.Answer)
+		// Guard: empty guide answer must never match anything, including an empty student answer.
+		if expected == "" {
+			return false
+		}
+		return answer == expected
 	}
 }

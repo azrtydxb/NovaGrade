@@ -6,10 +6,22 @@
 //
 // # Guide-load priority order
 //
-//  1. DB guide store: GetSubmission → AssessmentVersionID → GetLatestGuide →
-//     LockGuide (idempotent, log-only on failure).
+//  1. DB guide store: GetSubmission → AssessmentVersionID → ListGuideVersions →
+//     pick locked version (or lock-and-use latest) → grade against that version.
 //  2. Object-store guide.v1.json in the submission's prefix.
 //  3. LLMJudge fallback: ask the AI provider to grade each question.
+//
+// # Lock-on-grading semantics
+//
+// When more than one guide version exists:
+//   - If any version is LOCKED, the highest locked version is used. This pins the
+//     entire batch to the first-locked guide, regardless of later imports.
+//   - If NO version is locked, the latest version is used and immediately locked
+//     (lock-on-grading-start). Subsequent submissions in the same batch will then
+//     find a locked version and use it.
+//
+// LockGuide failure is log-only (non-fatal) to avoid blocking grading on a
+// transient DB error.
 //
 // # Object-key conventions
 //
@@ -125,31 +137,47 @@ func HandleEnvelope(ctx context.Context, deps Deps, env contracts.Envelope) erro
 			if subErr != nil && !errors.Is(subErr, store.ErrNotFound) {
 				return fmt.Errorf("grade: get submission %s: %w", env.SubmissionID, subErr)
 			}
+			if subErr == nil {
+				// Tenant-consistency assert: the submission's tenant must match the envelope tenant.
+				// Grade a submission only when the tenant is unambiguous to prevent cross-tenant leakage.
+				if sub.TenantID.String() != env.TenantID {
+					log.Printf("grade: SECURITY: submission %s tenant %s does not match envelope tenant %s; rejecting",
+						env.SubmissionID, sub.TenantID, env.TenantID)
+					return fmt.Errorf("grade: tenant mismatch for submission %s: submission tenant %s != envelope tenant %s",
+						env.SubmissionID, sub.TenantID, env.TenantID)
+				}
+			}
 			if subErr == nil && sub.AssessmentVersionID != nil {
 				avid := *sub.AssessmentVersionID
 				tenantUID, tenantParseErr := uuid.Parse(env.TenantID)
 				if tenantParseErr != nil {
 					log.Printf("grade: warning: cannot parse tenant_id %q as UUID (%v); skipping DB guide lookup", env.TenantID, tenantParseErr)
 				} else {
-					mg, guideErr := deps.Store.GetLatestGuide(ctx, tenantUID, avid)
-					if guideErr == nil {
+					// Fix 3: lock-on-grading pins the batch to the locked version.
+					// Use ListGuideVersions (ordered DESC by version) to pick:
+					//   - The highest locked version if any exists.
+					//   - The latest version otherwise (and then lock it).
+					mg, lockFirst, listErr := selectLockedOrLatestGuide(ctx, deps.Store, tenantUID, avid)
+					if listErr == nil {
 						g, guideParseErr := grade.LoadGuideFromJSON(mg.Content)
 						if guideParseErr != nil {
 							log.Printf("grade: warning: could not parse DB guide %s (%v); trying obj-store guide", mg.ID, guideParseErr)
 						} else {
 							scheme = grade.NewGuideMarkScheme(g, llmJudge, deps.Provider, deps.GradeModel)
 							guideLoaded = true
-							log.Printf("grade: loaded DB guide %s (v%d, %d entries) for assessment_version %s",
-								mg.ID, mg.Version, len(g), avid)
-							// Lock-on-grading-start: idempotent.
-							if lockErr := deps.Store.LockGuide(ctx, tenantUID, mg.ID); lockErr != nil {
-								log.Printf("grade: warning: could not lock guide %s: %v", mg.ID, lockErr)
-							} else {
-								log.Printf("grade: locked guide %s (lock-on-grading-start)", mg.ID)
+							log.Printf("grade: loaded DB guide %s (v%d, locked=%v, %d entries) for assessment_version %s",
+								mg.ID, mg.Version, mg.Locked, len(g), avid)
+							// Lock-on-grading-start: idempotent, log-only on failure.
+							if lockFirst {
+								if lockErr := deps.Store.LockGuide(ctx, tenantUID, mg.ID); lockErr != nil {
+									log.Printf("grade: warning: could not lock guide %s: %v", mg.ID, lockErr)
+								} else {
+									log.Printf("grade: locked guide %s (lock-on-grading-start)", mg.ID)
+								}
 							}
 						}
-					} else if !errors.Is(guideErr, store.ErrNotFound) {
-						log.Printf("grade: warning: DB GetLatestGuide for av=%s: %v; trying obj-store guide", avid, guideErr)
+					} else if !errors.Is(listErr, store.ErrNotFound) {
+						log.Printf("grade: warning: DB guide lookup for av=%s: %v; trying obj-store guide", avid, listErr)
 					}
 				}
 			}
@@ -254,4 +282,39 @@ func collectUniqueFlags(paper contracts.GradedPaper) []string {
 		flags = []string{}
 	}
 	return flags
+}
+
+// selectLockedOrLatestGuide implements Fix 3 (lock-on-grading pins batch to locked version).
+//
+// It calls ListGuideVersions (versions ordered DESC by version number) and
+// selects the guide to grade against:
+//   - If any version is LOCKED, the highest locked version (first locked found in
+//     DESC order) is returned. lockFirst is false — no locking needed.
+//   - If NONE is locked, the latest version (versions[0]) is returned and
+//     lockFirst is true, indicating the caller should lock it.
+//
+// Returns (selectedGuide, lockFirst, error).
+// Returns store.ErrNotFound (wrapped) when no versions exist.
+func selectLockedOrLatestGuide(ctx context.Context, s *store.Store, tenantUID, avid uuid.UUID) (store.MarkingGuide, bool, error) {
+	versions, err := s.ListGuideVersions(ctx, tenantUID, avid)
+	if err != nil {
+		return store.MarkingGuide{}, false, fmt.Errorf("ListGuideVersions av=%s: %w", avid, err)
+	}
+	if len(versions) == 0 {
+		return store.MarkingGuide{}, false, fmt.Errorf("no guide versions for av=%s: %w", avid, store.ErrNotFound)
+	}
+
+	// Versions are ordered DESC by version number (newest first).
+	// Find the first (highest-version) locked entry.
+	for _, v := range versions {
+		if v.Locked {
+			log.Printf("grade: using locked guide %s (v%d) for assessment_version %s", v.ID, v.Version, avid)
+			return v, false, nil
+		}
+	}
+
+	// No locked version found: use the latest (versions[0]) and signal the caller to lock it.
+	latest := versions[0]
+	log.Printf("grade: no locked guide found for av=%s; using latest v%d and will lock it", avid, latest.Version)
+	return latest, true, nil
 }

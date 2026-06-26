@@ -69,11 +69,29 @@ func ValidateGuide(g Guide) error {
 					entryErrs = append(entryErrs, "multi_step match requires at least one step")
 				} else {
 					for i, s := range e.Steps {
-						if !knownMatchTypes[s.Match] && s.Match != "" {
-							entryErrs = append(entryErrs, fmt.Sprintf("step[%d] has unknown match type %q", i, s.Match))
+						// Reject empty/missing step match type.
+						if s.Match == "" {
+							entryErrs = append(entryErrs, fmt.Sprintf("step[%d] has empty/missing match type (question %s)", i, qno))
+							continue
 						}
-						if s.Match == "numeric" && s.NumericAnswer == nil {
-							entryErrs = append(entryErrs, fmt.Sprintf("step[%d] numeric match requires numeric_answer to be present", i))
+						if !knownMatchTypes[s.Match] {
+							entryErrs = append(entryErrs, fmt.Sprintf("step[%d] has unknown match type %q", i, s.Match))
+							continue
+						}
+						// Per-type required field checks for each step.
+						switch s.Match {
+						case "exact", "exact_ci":
+							if strings.TrimSpace(s.Answer) == "" {
+								entryErrs = append(entryErrs, fmt.Sprintf("step[%d] %s match requires a non-empty answer field (question %s)", i, s.Match, qno))
+							}
+						case "set":
+							if len(s.Accept) == 0 {
+								entryErrs = append(entryErrs, fmt.Sprintf("step[%d] set match requires at least one accept value (question %s)", i, qno))
+							}
+						case "numeric":
+							if s.NumericAnswer == nil {
+								entryErrs = append(entryErrs, fmt.Sprintf("step[%d] numeric match requires numeric_answer to be present", i))
+							}
 						}
 					}
 				}

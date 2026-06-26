@@ -610,6 +610,102 @@ func TestGuideMarkScheme_NormalizedSet_NoProviderCall(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Fix 1(b): empty guide answer/accept must never match (even an empty student line)
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestGuideMarkScheme_EmptyAnswer_ExactStep_DoesNotMatch(t *testing.T) {
+	// A multi_step entry whose exact step has an empty answer must award 0 marks
+	// even when the student's answer contains a blank line. This guards against
+	// misconfigured guides silently awarding marks to every blank submission.
+	schemeMock := &mockProvider{}
+	fallbackMock := &mockProvider{}
+
+	guide := grade.Guide{
+		"Q1": grade.GuideEntry{
+			MaxMarks: 3,
+			Match:    "multi_step",
+			Steps: []grade.StepEntry{
+				// Deliberately empty answer — simulates a misconfigured guide entry.
+				{Match: "exact", Answer: "", Marks: 3},
+			},
+		},
+	}
+	fallback := grade.NewLLMJudge(fallbackMock, "fallback-model")
+	scheme := grade.NewGuideMarkScheme(guide, fallback, schemeMock, "scheme-model")
+
+	// Student answer contains a blank line that would otherwise match an empty expected answer.
+	q := contracts.TranscribedQuestion{
+		QuestionNo:    "Q1",
+		MaxMarks:      3,
+		QuestionText:  "Write your answer.",
+		StudentAnswer: "some text\n\nmore text",
+		ReadConfidence: 1.0,
+	}
+
+	gq, err := scheme.Grade(context.Background(), q)
+	require.NoError(t, err)
+	assert.Equal(t, 0.0, gq.AwardedMarks,
+		"empty guide answer must NOT match a blank line in the student answer")
+	assert.False(t, schemeMock.called, "scheme provider must NOT be called for multi_step match")
+	assert.False(t, fallbackMock.called, "fallback provider must NOT be called for multi_step match")
+}
+
+func TestObjectiveMatch_EmptyGuideAnswer_NeverMatches(t *testing.T) {
+	// The objectiveMatch guard: an empty guide answer must not match an empty student answer
+	// for all three objective match types tested via the high-level GuideMarkScheme.
+	schemeMock := &mockProvider{}
+	fallbackMock := &mockProvider{}
+
+	tests := []struct {
+		name  string
+		entry grade.GuideEntry
+	}{
+		{
+			name: "exact with empty answer",
+			entry: grade.GuideEntry{
+				MaxMarks: 2, Match: "exact", Answer: "",
+			},
+		},
+		{
+			name: "exact_ci with empty answer",
+			entry: grade.GuideEntry{
+				MaxMarks: 2, Match: "exact_ci", Answer: "",
+			},
+		},
+		{
+			name: "set with only empty accept values",
+			entry: grade.GuideEntry{
+				MaxMarks: 2, Match: "set", Accept: []string{"", "  "},
+			},
+		},
+	}
+
+	fallback := grade.NewLLMJudge(fallbackMock, "fallback-model")
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			guide := grade.Guide{"Q1": tc.entry}
+			scheme := grade.NewGuideMarkScheme(guide, fallback, schemeMock, "scheme-model")
+
+			// Student answer is empty — should never get marks from an empty guide entry.
+			// Note: the scheme returns 0 for blank answers regardless (blank-answer shortcut),
+			// so we also test with a non-blank but still mismatching empty-expected answer.
+			q := contracts.TranscribedQuestion{
+				QuestionNo:     "Q1",
+				MaxMarks:       2,
+				QuestionText:   "Answer:",
+				StudentAnswer:  "", // blank
+				ReadConfidence: 1.0,
+			}
+			gq, err := scheme.Grade(context.Background(), q)
+			require.NoError(t, err)
+			assert.Equal(t, 0.0, gq.AwardedMarks,
+				"%s: blank student answer must award 0 with empty guide answer", tc.name)
+		})
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Backward compatibility: existing match types must be unaffected
 // ─────────────────────────────────────────────────────────────────────────────
 

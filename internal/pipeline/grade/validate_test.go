@@ -206,3 +206,95 @@ func TestValidateGuide_ExactCI_WithAnswer_Valid(t *testing.T) {
 	}
 	require.NoError(t, grade.ValidateGuide(g))
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fix 1(a): multi_step step-level required field validation
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestValidateGuide_MultiStep_ExactStepMissingAnswer_Rejected(t *testing.T) {
+	// An exact step inside multi_step without an answer field must be rejected.
+	g := grade.Guide{
+		"Q1": {
+			MaxMarks: 4,
+			Match:    "multi_step",
+			Steps: []grade.StepEntry{
+				{Match: "exact", Marks: 2}, // missing answer
+				{Match: "exact_ci", Answer: "F=ma", Marks: 2},
+			},
+		},
+	}
+	err := grade.ValidateGuide(g)
+	require.Error(t, err, "multi_step with an exact step missing answer must be rejected")
+	assert.Contains(t, err.Error(), "Q1")
+	assert.Contains(t, err.Error(), "step[0]")
+	assert.Contains(t, err.Error(), "answer")
+}
+
+func TestValidateGuide_MultiStep_ExactCIStepMissingAnswer_Rejected(t *testing.T) {
+	// An exact_ci step inside multi_step without an answer field must be rejected.
+	g := grade.Guide{
+		"Q2": {
+			MaxMarks: 4,
+			Match:    "multi_step",
+			Steps: []grade.StepEntry{
+				{Match: "exact_ci", Marks: 2}, // missing answer
+			},
+		},
+	}
+	err := grade.ValidateGuide(g)
+	require.Error(t, err, "multi_step with exact_ci step missing answer must be rejected")
+	assert.Contains(t, err.Error(), "Q2")
+	assert.Contains(t, err.Error(), "answer")
+}
+
+func TestValidateGuide_MultiStep_SetStepMissingAccept_Rejected(t *testing.T) {
+	// A set step inside multi_step without any accept values must be rejected.
+	g := grade.Guide{
+		"Q3": {
+			MaxMarks: 3,
+			Match:    "multi_step",
+			Steps: []grade.StepEntry{
+				{Match: "set", Marks: 1}, // missing accept
+				{Match: "numeric", NumericAnswer: f64(20), Marks: 2},
+			},
+		},
+	}
+	err := grade.ValidateGuide(g)
+	require.Error(t, err, "multi_step with set step missing accept must be rejected")
+	assert.Contains(t, err.Error(), "Q3")
+	assert.Contains(t, err.Error(), "step[0]")
+	assert.Contains(t, err.Error(), "accept")
+}
+
+func TestValidateGuide_MultiStep_EmptyStepMatch_Rejected(t *testing.T) {
+	// A step with an empty match field must be rejected.
+	g := grade.Guide{
+		"Q4": {
+			MaxMarks: 2,
+			Match:    "multi_step",
+			Steps: []grade.StepEntry{
+				{Match: "", Answer: "something", Marks: 2}, // empty match
+			},
+		},
+	}
+	err := grade.ValidateGuide(g)
+	require.Error(t, err, "multi_step with step having empty match must be rejected")
+	assert.Contains(t, err.Error(), "Q4")
+}
+
+func TestValidateGuide_MultiStep_ValidSteps_Accepted(t *testing.T) {
+	// A well-formed multi_step with all required fields must pass.
+	g := grade.Guide{
+		"Q5": {
+			MaxMarks: 5,
+			Match:    "multi_step",
+			Steps: []grade.StepEntry{
+				{Match: "exact", Answer: "F=ma", Marks: 1},
+				{Match: "exact_ci", Answer: "newton", Marks: 1},
+				{Match: "set", Accept: []string{"20 N", "20N"}, Marks: 1},
+				{Match: "numeric", NumericAnswer: f64(20), Tolerance: 0.5, Marks: 2},
+			},
+		},
+	}
+	require.NoError(t, grade.ValidateGuide(g))
+}
