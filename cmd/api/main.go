@@ -40,6 +40,7 @@ import (
 	"github.com/azrtydxb/novagrade/internal/domain"
 	"github.com/azrtydxb/novagrade/internal/integration"
 	integrationcsv "github.com/azrtydxb/novagrade/internal/integration/csv"
+	"github.com/azrtydxb/novagrade/internal/integration/oneroster"
 	"github.com/azrtydxb/novagrade/internal/integration/webhook"
 	"github.com/azrtydxb/novagrade/internal/queue"
 	"github.com/azrtydxb/novagrade/internal/secrets"
@@ -163,6 +164,7 @@ func main() {
 	// ── Integration registry (built-in connectors) ────────────────────────────
 	reg := integration.NewRegistry()
 	integrationcsv.Register(reg)
+	oneroster.Register(reg)
 
 	ih := &api.IntegrationHandlers{
 		Store:      st,

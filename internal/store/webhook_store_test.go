@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"errors"
 	"testing"
 
 	"github.com/azrtydxb/novagrade/internal/secrets"
@@ -125,12 +126,8 @@ func TestWebhookStore(t *testing.T) {
 		if err := s.DeleteWebhookSubscription(ctx, tenantID, sub.ID); err != nil {
 			t.Fatalf("first DeleteWebhookSubscription: %v", err)
 		}
-		if err := s.DeleteWebhookSubscription(ctx, tenantID, sub.ID); !isNotFound(err) {
+		if err := s.DeleteWebhookSubscription(ctx, tenantID, sub.ID); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("second delete: expected ErrNotFound, got %v", err)
 		}
 	})
-}
-
-func isNotFound(err error) bool {
-	return err == ErrNotFound
 }
