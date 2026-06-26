@@ -216,6 +216,15 @@ func HandleEnvelope(ctx context.Context, deps Deps, env contracts.Envelope) erro
 
 	// 4. Persist graded.v{N}.json.
 	gradedKey := fmt.Sprintf("%s/%s/graded.v%d.json", env.TenantID, env.SubmissionID, gradedVersion)
+
+	// 4a. Archive-before-overwrite: if graded.v1.json already exists (regrade),
+	// copy the existing bytes to graded.archive.{N}.json before overwriting.
+	// N is chosen as the next free archive index (try 1, 2, 3, ... until one
+	// doesn't exist). On the first grade (no prior artifact), no archive is made.
+	if archiveErr := archivePriorGradedArtifact(ctx, deps.ObjStore, deps.Bucket, env.TenantID, env.SubmissionID); archiveErr != nil {
+		return fmt.Errorf("grade: archive prior graded artifact: %w", archiveErr)
+	}
+
 	gradedJSON, err := json.Marshal(gradedPaper)
 	if err != nil {
 		return fmt.Errorf("grade: marshal graded paper: %w", err)
@@ -282,6 +291,61 @@ func collectUniqueFlags(paper contracts.GradedPaper) []string {
 		flags = []string{}
 	}
 	return flags
+}
+
+// objStorer is the minimal object-store interface required by
+// archivePriorGradedArtifact. *store.ObjStore satisfies it.
+// Defining it here (rather than in the store package) keeps the interface
+// small and co-located with its only consumer, and lets tests inject a
+// lightweight fake without a real MinIO server.
+type objStorer interface {
+	Get(ctx context.Context, bucket, key string) ([]byte, error)
+	Put(ctx context.Context, bucket, key string, data []byte, contentType string) error
+}
+
+// archivePriorGradedArtifact copies the current graded.v1.json (if any) to the
+// next free archive slot graded.archive.{N}.json before it is overwritten by a
+// regrade.
+//
+// Index selection: start at N=1 and increment until an archive key does not
+// exist. This is O(number of prior regrades) per submission — acceptable since
+// regrades are rare. The caller is responsible for writing the new graded.v1.json
+// afterwards; this function only reads and copies.
+//
+// If graded.v1.json does not yet exist (first grade), this is a no-op.
+func archivePriorGradedArtifact(ctx context.Context, obj objStorer, bucket, tenantID, submissionID string) error {
+	priorKey := fmt.Sprintf("%s/%s/graded.v%d.json", tenantID, submissionID, gradedVersion)
+	priorData, err := obj.Get(ctx, bucket, priorKey)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			// First grade — nothing to archive.
+			return nil
+		}
+		return fmt.Errorf("read prior graded artifact %q: %w", priorKey, err)
+	}
+
+	// Find the next free archive index. The check-then-put is non-atomic, but
+	// concurrent regraders for the same submission are prevented by the state
+	// machine (EventRegrade requires the submission to be in a specific state,
+	// serializing regrades). If grading ever becomes concurrent per submission,
+	// switch to a conditional PUT (If-None-Match: *) to make this atomic.
+	var archiveIndex int
+	for archiveIndex = 1; ; archiveIndex++ {
+		archiveKey := fmt.Sprintf("%s/%s/graded.archive.%d.json", tenantID, submissionID, archiveIndex)
+		_, checkErr := obj.Get(ctx, bucket, archiveKey)
+		if errors.Is(checkErr, store.ErrNotFound) {
+			// This index is free — use it.
+			if putErr := obj.Put(ctx, bucket, archiveKey, priorData, "application/json"); putErr != nil {
+				return fmt.Errorf("write archive %q: %w", archiveKey, putErr)
+			}
+			log.Printf("grade: archived prior graded artifact to %q (regrade, archive index %d)", archiveKey, archiveIndex)
+			return nil
+		}
+		if checkErr != nil {
+			return fmt.Errorf("check archive slot %d for %s/%s: %w", archiveIndex, tenantID, submissionID, checkErr)
+		}
+		// Slot exists — try the next one.
+	}
 }
 
 // selectLockedOrLatestGuide implements Fix 3 (lock-on-grading pins batch to locked version).

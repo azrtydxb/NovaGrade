@@ -382,11 +382,13 @@ func (s *Store) ListTeacherReviews(ctx context.Context, tenantID uuid.UUID, subm
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FinalGrade domain type and repository methods (insert + get only; no update)
+// FinalGrade domain type and repository methods
 // ─────────────────────────────────────────────────────────────────────────────
 
 // FinalGrade is the public domain representation of a final_grade row.
-// final_grade is append-only: there are no update or delete methods.
+// InsertFinalGrade uses UPSERT semantics: first approve inserts, re-approve after
+// a regrade updates the row in place (updated_at bumps). Prior grades are preserved
+// in the audit_event trail. There is no delete method.
 type FinalGrade struct {
 	ID           uuid.UUID
 	TenantID     uuid.UUID
@@ -412,8 +414,10 @@ type InsertFinalGradeParams struct {
 	ApprovedAt   time.Time
 }
 
-// InsertFinalGrade inserts an immutable approval snapshot into final_grade and
-// returns the persisted row. There is no update or delete method for this table.
+// InsertFinalGrade upserts an approval snapshot into final_grade and returns the
+// persisted row. On first approve it inserts; on re-approve after a regrade it
+// updates total/max_total/score_100/graded_key/approved_by/approved_at in place
+// (updated_at bumps). Prior grades are preserved in the audit_event trail.
 func (s *Store) InsertFinalGrade(ctx context.Context, p InsertFinalGradeParams) (FinalGrade, error) {
 	row, err := s.queries.InsertFinalGrade(ctx, db.InsertFinalGradeParams{
 		TenantID:     p.TenantID,

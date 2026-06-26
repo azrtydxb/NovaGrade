@@ -302,3 +302,56 @@ func TestInsertAuditEvent(t *testing.T) {
 	require.Equal(t, "state_change", persistedAction, "persisted action must match inserted value")
 	require.Equal(t, "submission", persistedEntityType, "persisted entity_type must match inserted value")
 }
+
+func TestInsertFinalGrade_UpsertsOnConflict(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+
+	tenantID := mustCreateSchool(t, st)
+	sub, err := st.CreateSubmission(ctx, CreateSubmissionParams{TenantID: tenantID})
+	require.NoError(t, err)
+
+	// First insert.
+	fg1, err := st.InsertFinalGrade(ctx, InsertFinalGradeParams{
+		TenantID:     tenantID,
+		SubmissionID: sub.ID,
+		Total:        10.0,
+		MaxTotal:     15.0,
+		Score100:     66.7,
+		GradedKey:    "graded/v1.json",
+		ApprovedBy:   "teacher@school.com",
+		ApprovedAt:   time.Now(),
+	})
+	require.NoError(t, err)
+	require.InDelta(t, 10.0, fg1.Total, 0.001)
+
+	// Second insert (upsert) — same (tenant, submission), different total + key.
+	fg2, err := st.InsertFinalGrade(ctx, InsertFinalGradeParams{
+		TenantID:     tenantID,
+		SubmissionID: sub.ID,
+		Total:        12.0,
+		MaxTotal:     15.0,
+		Score100:     80.0,
+		GradedKey:    "graded/v2.json",
+		ApprovedBy:   "teacher@school.com",
+		ApprovedAt:   time.Now(),
+	})
+	require.NoError(t, err, "upsert must not fail on conflict")
+	require.InDelta(t, 12.0, fg2.Total, 0.001, "upserted row should have new total")
+	require.Equal(t, "graded/v2.json", fg2.GradedKey, "upserted row should have new key")
+
+	// Verify exactly one row in DB.
+	got, err := st.GetFinalGrade(ctx, tenantID, sub.ID)
+	require.NoError(t, err)
+	require.InDelta(t, 12.0, got.Total, 0.001)
+	require.Equal(t, "graded/v2.json", got.GradedKey)
+
+	// Verify count via raw query.
+	var count int
+	err = st.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM final_grade WHERE tenant_id = $1 AND submission_id = $2`,
+		tenantID, sub.ID,
+	).Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, 1, count, "must be exactly one final_grade row after upsert")
+}

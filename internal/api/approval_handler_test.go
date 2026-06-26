@@ -42,7 +42,7 @@ type ApprovalFakeStore struct {
 	reviews     []store.TeacherReview
 	// failAudit forces InsertAuditEvent to return an error.
 	failAudit bool
-	// preloadedFinalGrades holds existing FinalGrade rows for GetFinalGrade to return.
+	// preloadedFinalGrades holds existing FinalGrade rows for test context only — the Approve handler no longer reads FinalGrade (always recompute+upsert).
 	preloadedFinalGrades map[uuid.UUID]store.FinalGrade
 }
 
@@ -108,6 +108,16 @@ func (f *ApprovalFakeStore) InsertFinalGrade(_ context.Context, p store.InsertFi
 		ApprovedBy:   p.ApprovedBy,
 		ApprovedAt:   p.ApprovedAt,
 		CreatedAt:    time.Now(),
+	}
+	// UPSERT: if a FinalGrade already exists for this (TenantID, SubmissionID),
+	// update it in-place to match real DB semantics; otherwise append.
+	for i, existing := range f.finalGrades {
+		if existing.TenantID == p.TenantID && existing.SubmissionID == p.SubmissionID {
+			fg.ID = existing.ID
+			fg.CreatedAt = existing.CreatedAt
+			f.finalGrades[i] = fg
+			return fg, nil
+		}
 	}
 	f.finalGrades = append(f.finalGrades, fg)
 	return fg, nil
@@ -853,8 +863,10 @@ func TestExport_CrossTenant(t *testing.T) {
 }
 
 // TestApprove_Idempotent verifies that a second approve call on a submission that
-// already has a FinalGrade does NOT write a second FinalGrade or audit event, but
-// DOES re-publish the approve command and returns 200 with the existing FinalGrade.
+// already has a FinalGrade (plain retry — graded.v1.json unchanged) is idempotent-in-effect:
+// it recomputes the same values, upserts the FinalGrade (InsertFinalGrade called once),
+// writes one audit event, re-publishes the approve command, and returns 200 with
+// the recomputed FinalGrade (same total as original).
 func TestApprove_Idempotent(t *testing.T) {
 	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
 
@@ -865,6 +877,7 @@ func TestApprove_Idempotent(t *testing.T) {
 
 	// Submission still in teacher_review (orchestrator hasn't advanced it yet).
 	sub := fakeApprovalStore.seedSubmission(tenantID, contracts.StateTeacherReview)
+	// graded.v1.json has total=10 — same as the pre-seeded FinalGrade (plain retry).
 	makeGradedPaperForApproval(t, fakeObjects, tenantID, sub.ID)
 
 	// Pre-seed an existing FinalGrade (simulates a previous approve that completed
@@ -906,9 +919,9 @@ func TestApprove_Idempotent(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	// Idempotent path: one audit event (approve re-publish) but no second FinalGrade.
-	assert.Equal(t, 1, fakeApprovalStore.auditCount(), "idempotent path must write one audit event")
-	assert.Equal(t, 0, fakeApprovalStore.finalGradeCount(), "idempotent path must not write a second FinalGrade")
+	// Always-recompute path: one audit event and one FinalGrade upsert (idempotent-in-effect).
+	assert.Equal(t, 1, fakeApprovalStore.auditCount(), "must write one audit event")
+	assert.Equal(t, 1, fakeApprovalStore.finalGradeCount(), "must upsert one FinalGrade (UPSERT semantics)")
 
 	// The approve command MUST be re-published.
 	require.Equal(t, 1, fakeBus.publishedCount())
@@ -917,11 +930,101 @@ func TestApprove_Idempotent(t *testing.T) {
 	assert.Equal(t, contracts.StageApprove, msg.env.Stage)
 	assert.Equal(t, sub.ID.String(), msg.env.SubmissionID)
 
-	// The response must be the existing FinalGrade.
+	// The response must reflect the recomputed grade (same values as original — plain retry).
 	var fg store.FinalGrade
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &fg))
-	assert.Equal(t, existingFG.ID, fg.ID)
-	assert.Equal(t, existingFG.SubmissionID, fg.SubmissionID)
+	assert.InDelta(t, 10.0, fg.Total, 0.001, "plain retry must return same total")
+	assert.Equal(t, sub.ID, fg.SubmissionID)
+}
+
+// TestApprove_AfterRegrade_UpdatesFinalGrade verifies that re-approving after a regrade
+// (graded.v1.json has new total) finalizes the NEW grade, not the old one.
+func TestApprove_AfterRegrade_UpdatesFinalGrade(t *testing.T) {
+	t.Setenv("JWT_SIGNING_KEY", "test-secret-key")
+
+	tenantID := uuid.New()
+	fakeApprovalStore := newApprovalFakeStore()
+	fakeObjects := NewFakeObjectStore()
+	fakeBus := &ApprovalFakeBus{}
+
+	// Submission still in teacher_review (re-opened after appeal regrade).
+	sub := fakeApprovalStore.seedSubmission(tenantID, contracts.StateTeacherReview)
+
+	// graded.v1.json now holds the NEW (regraded) totals: total=12 (was 10).
+	newPaper := contracts.GradedPaper{
+		Subject:   "Physics",
+		SourcePDF: "source.pdf",
+		Questions: []contracts.GradedQuestion{
+			{QuestionNo: "1", MaxMarks: 10, AwardedMarks: 9, Justification: "Regraded", GradeConfidence: 0.95, Flags: []string{}},
+			{QuestionNo: "2", MaxMarks: 5, AwardedMarks: 3, Justification: "Partial", GradeConfidence: 0.8, Flags: []string{}},
+		},
+		Total:    12,
+		MaxTotal: 15,
+		Score100: 80.0,
+	}
+	key := fmt.Sprintf("%s/%s/graded.v1.json", tenantID, sub.ID)
+	paperData, err := json.Marshal(newPaper)
+	require.NoError(t, err)
+	require.NoError(t, fakeObjects.PutObject(context.Background(), key, paperData))
+
+	// Pre-seed an existing FinalGrade with old total=10 (simulating original approval).
+	existingFG := store.FinalGrade{
+		ID:           uuid.New(),
+		TenantID:     tenantID,
+		SubmissionID: sub.ID,
+		Total:        10,
+		MaxTotal:     15,
+		Score100:     66.7,
+		GradedKey:    fmt.Sprintf("%s/%s/graded.final.json", tenantID, sub.ID),
+		ApprovedBy:   "teacher-1",
+		ApprovedAt:   time.Now(),
+		CreatedAt:    time.Now(),
+	}
+	fakeApprovalStore.preloadedFinalGrades[sub.ID] = existingFG
+
+	h := &api.ApprovalHandlers{
+		Store:      fakeApprovalStore,
+		Objects:    fakeObjects,
+		Bus:        fakeBus,
+		DeployMode: "onprem",
+	}
+
+	principal := auth.Principal{
+		ID:       "teacher-1",
+		TenantID: tenantID.String(),
+		Roles:    []domain.Role{domain.RoleTeacher},
+	}
+	tok := issueToken(t, principal)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/submissions/"+sub.ID.String()+"/approve", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+
+	router := buildApprovalRouter(t, h, auth.NewAPIKeyResolver())
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	// Response must reflect the NEW grade (12, not the old 10).
+	var fg store.FinalGrade
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &fg))
+	assert.InDelta(t, 12.0, fg.Total, 0.001, "returned FinalGrade must have new total=12")
+
+	// Audit event with action="approve" must be recorded.
+	require.Equal(t, 1, fakeApprovalStore.auditCount())
+	assert.Equal(t, "approve", fakeApprovalStore.latestAuditAction())
+
+	// InsertFinalGrade must have been called (upsert).
+	require.Equal(t, 1, fakeApprovalStore.finalGradeCount())
+	stored := fakeApprovalStore.latestFinalGrade()
+	assert.InDelta(t, 12.0, stored.Total, 0.001, "stored FinalGrade must have new total=12")
+
+	// StageApprove command must be published.
+	require.Equal(t, 1, fakeBus.publishedCount())
+	msg := fakeBus.latestMessage()
+	assert.Equal(t, "commands.q", msg.queue)
+	assert.Equal(t, contracts.StageApprove, msg.env.Stage)
+	assert.Equal(t, sub.ID.String(), msg.env.SubmissionID)
 }
 
 // TestPublish_CrossTenant verifies 404 for cross-tenant access to publish.
