@@ -23,7 +23,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -374,10 +373,10 @@ func TestAdvancedAIFlow(t *testing.T) {
 	t.Logf("advanced-ai: PHYS-GRAV-001 mean_pct=%.4f mastery=%s", statPhys.MeanPct, statPhys.Mastery)
 
 	// 1a: awarded=2, max=2 → MeanPct = 1.0 (secure)
-	assert.InDelta(t, 1.0, statAlg.MeanPct, 0.01,
+	require.InDelta(t, 1.0, statAlg.MeanPct, 0.01,
 		"MATH-ALG-001 MeanPct should be ~1.0 (2/2 awarded)")
 	// 1b: awarded=2, max=3 → MeanPct ~ 0.667 (developing)
-	assert.InDelta(t, 0.667, statPhys.MeanPct, 0.01,
+	require.InDelta(t, 0.667, statPhys.MeanPct, 0.01,
 		"PHYS-GRAV-001 MeanPct should be ~0.667 (2/3 awarded)")
 	assert.Less(t, statPhys.MeanPct, statAlg.MeanPct,
 		"PHYS-GRAV-001 must have lower MeanPct than MATH-ALG-001")
@@ -423,9 +422,9 @@ func TestAdvancedAIFlow(t *testing.T) {
 	t.Logf("advanced-ai: ai-provider id=%s", provID)
 
 	// Assert the key is encrypted at rest by checking raw DB bytes (not plaintext).
-	ctx2 := context.Background()
-	_, encBytes, err := inf.pgStore.GetDefaultAIProviderConfigWithKey(ctx2, testTenantID)
-	// Before setting default it returns ErrNotFound — that's fine.
+	// Before setting default, GetDefaultAIProviderConfigWithKey returns ErrNotFound — intentionally ignored.
+	_, _, _ = inf.pgStore.GetDefaultAIProviderConfigWithKey(ctx, testTenantID)
+
 	// Set it default first, then verify.
 	setDefaultResp := doPost(t, apiURL, adminJWT, fmt.Sprintf("/v1/ai-providers/%s/default", provID))
 	require.Equal(t, http.StatusOK, setDefaultResp.status,
@@ -433,7 +432,7 @@ func TestAdvancedAIFlow(t *testing.T) {
 	t.Logf("advanced-ai: set provider %s as default", provID)
 
 	// Now GetDefaultAIProviderConfigWithKey should return encrypted bytes (not nil).
-	_, encBytes, err = inf.pgStore.GetDefaultAIProviderConfigWithKey(ctx2, testTenantID)
+	_, encBytes, err := inf.pgStore.GetDefaultAIProviderConfigWithKey(ctx, testTenantID)
 	require.NoError(t, err, "GetDefaultAIProviderConfigWithKey must succeed after setting default")
 	require.NotEmpty(t, encBytes, "api_key_enc bytes must be stored for the default provider")
 	// The raw encrypted bytes must NOT equal the plaintext key bytes.
@@ -498,13 +497,35 @@ func TestAdvancedAIFlow(t *testing.T) {
 	assert.InDelta(t, paperBefore.Score100, paperAfter.Score100, 1e-9,
 		"Score100 must be UNCHANGED after regenerate")
 
-	// Assert Feedback and/or Revision were refreshed (non-empty after regenerate).
-	// The fake AI grade-model response doesn't include feedback, but DraftFeedback
-	// uses the "grade-model" model which the fake server handles. The fake server
-	// returns a grade response JSON as content — DraftFeedback may or may not parse
-	// useful data from it. What we can assert is that the paper was written back
-	// (graded.v1.json was updated — we already read it above).
-	// We also verify the response body matches what was written to object store.
+	// Assert Feedback and Revision are populated after regenerate.
+	// The fake AI server returns non-empty content for feedback-v1 and revision-v1
+	// calls (keyed on the system message content). Verify at least one question has
+	// both Feedback and Revision set, and that they differ from the pre-regenerate
+	// state (which had empty Feedback+Revision since this is the first regenerate).
+	atLeastOneFeedback := false
+	atLeastOneRevision := false
+	for i, q := range paperAfter.Questions {
+		if q.Feedback != "" {
+			atLeastOneFeedback = true
+			// Pre-regenerate Feedback must differ (was empty before first regen).
+			assert.NotEqual(t, paperBefore.Questions[i].Feedback, q.Feedback,
+				"question %s: Feedback must differ from pre-regenerate state after a true refresh", q.QuestionNo)
+		}
+		if q.Revision != "" {
+			atLeastOneRevision = true
+			// Pre-regenerate Revision must differ (was empty before first regen).
+			assert.NotEqual(t, paperBefore.Questions[i].Revision, q.Revision,
+				"question %s: Revision must differ from pre-regenerate state after a true refresh", q.QuestionNo)
+		}
+	}
+	assert.True(t, atLeastOneFeedback,
+		"at least one question must have non-empty Feedback after regenerate (fake AI returns 'Good effort — show your working.')")
+	assert.True(t, atLeastOneRevision,
+		"at least one question must have non-empty Revision after regenerate (fake AI returns 'Revisit the formula and re-check step 2.')")
+	t.Logf("advanced-ai: post-regenerate feedback populated=%v revision populated=%v",
+		atLeastOneFeedback, atLeastOneRevision)
+
+	// Verify the response body matches what was written to object store.
 	assert.InDelta(t, paperAfter.Total, paperRegenResp.Total, 1e-9,
 		"response body total must match what was written to object store")
 
@@ -559,16 +580,3 @@ func TestAdvancedAIFlow(t *testing.T) {
 		finalGrade.Total, paperBefore.Total)
 }
 
-// getJSONStatus issues an authenticated GET and returns the raw result without
-// asserting status code (for cases where we want to inspect errors).
-func getJSONStatus(t *testing.T, apiURL, tok, path string) (int, []byte) {
-	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, apiURL+path, nil)
-	require.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer "+tok)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	return resp.StatusCode, body
-}

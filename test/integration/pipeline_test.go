@@ -251,15 +251,48 @@ func newFakeAIServer(t *testing.T) *httptest.Server {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
+		// Parse the model field and, for grade-model calls, also parse the messages
+		// to detect feedback-v1 / revision-v1 prompt versions. Use json.RawMessage
+		// for Content so that multipart (array) messages from qwen3-vl image calls
+		// do not cause an unmarshal error — we only need text content for system messages.
 		var req struct {
-			Model string `json:"model"`
+			Model    string `json:"model"`
+			Messages []struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
 		}
 		if err := json.Unmarshal(body, &req); err != nil {
 			http.Error(w, "bad json", http.StatusBadRequest)
 			return
 		}
 
+		// For grade-model calls, branch on the system message content to detect
+		// feedback-v1 and revision-v1 prompt versions (PromptVersion is an internal
+		// field not sent over HTTP, so we key on the distinctive system prompt text).
+		// All other models (dots.ocr, qwen3, qwen3-vl) use the model-keyed map as before.
 		content, ok := responses[req.Model]
+		if req.Model == "grade-model" {
+			for _, m := range req.Messages {
+				if m.Role == "system" {
+					// Content is a JSON string — unmarshal to get the plain text.
+					var sysText string
+					if err := json.Unmarshal(m.Content, &sysText); err == nil {
+						switch {
+						case strings.Contains(sysText, "student-facing feedback"):
+							// feedback-v1 call from DraftFeedback.
+							content = "Good effort — show your working."
+							ok = true
+						case strings.Contains(sysText, "revision guidance"):
+							// revision-v1 call from DraftRevisionSuggestions.
+							content = "Revisit the formula and re-check step 2."
+							ok = true
+						}
+					}
+					break
+				}
+			}
+		}
 		if !ok {
 			content = "no content"
 		}
