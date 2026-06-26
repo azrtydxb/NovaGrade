@@ -71,13 +71,17 @@ func (c RosterConnector) ImportRoster(_ context.Context, r io.Reader) ([]contrac
 
 	headerLen := len(header)
 	var students []contracts.RosterStudent
+	var skipped []string
 
-	for _, row := range records[1:] {
+	for rowNum, row := range records[1:] {
+		lineNum := rowNum + 2 // 1-based, skip header
+
 		if len(row) == 0 {
 			continue
 		}
 		// Skip malformed rows that are shorter than the header.
 		if len(row) < headerLen {
+			skipped = append(skipped, fmt.Sprintf("line %d: short row (%d cols)", lineNum, len(row)))
 			continue
 		}
 
@@ -85,6 +89,7 @@ func (c RosterConnector) ImportRoster(_ context.Context, r io.Reader) ([]contrac
 		if roleIdx < len(row) {
 			role = strings.ToLower(strings.TrimSpace(row[roleIdx]))
 		}
+		// Skip non-student rows (normal filtering, not a malformed-row skip).
 		if role != "student" {
 			continue
 		}
@@ -111,9 +116,9 @@ func (c RosterConnector) ImportRoster(_ context.Context, r io.Reader) ([]contrac
 		}
 		// Per OneRoster v1.1 spec, email is optional; username is also optional.
 		// Skip rows where neither provides a usable identifier — there is no safe
-		// key to use for grade delivery. (Silent skip matches the non-student
-		// role filtering above; callers can detect via the returned slice length.)
+		// key to use for grade delivery. Report as malformed-row skip (no silent skip).
 		if email == "" {
+			skipped = append(skipped, fmt.Sprintf("line %d: student row has no email/username", lineNum))
 			continue
 		}
 
@@ -125,5 +130,9 @@ func (c RosterConnector) ImportRoster(_ context.Context, r io.Reader) ([]contrac
 		})
 	}
 
-	return students, nil
+	var retErr error
+	if len(skipped) > 0 {
+		retErr = fmt.Errorf("oneroster: skipped %d row(s): %s", len(skipped), strings.Join(skipped, "; "))
+	}
+	return students, retErr
 }

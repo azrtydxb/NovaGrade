@@ -71,6 +71,54 @@ func TestRosterConnector_ImportRoster(t *testing.T) {
 				{Email: "dave_b", FullName: "Dave Brown", ExternalID: "s003"},
 			},
 		},
+		{
+			name: "student row missing email and username — reported as skipped",
+			readerFn: func(t *testing.T) io.Reader {
+				return strings.NewReader(
+					"sourcedId,givenName,familyName,email,role\n" +
+						"s001,Alice,Smith,alice@school.edu,student\n" +
+						"s004,Frank,Jones,,student\n",
+				)
+			},
+			wantLen: 1,
+			wantErr: true,
+			errContains: "line 3: student row has no email/username",
+			wantStudents: []contracts.RosterStudent{
+				{Email: "alice@school.edu", FullName: "Alice Smith", ExternalID: "s001"},
+			},
+		},
+		{
+			name: "short row — reported as skipped",
+			readerFn: func(t *testing.T) io.Reader {
+				return strings.NewReader(
+					"sourcedId,givenName,familyName,email,role\n" +
+						"s001,Alice,Smith,alice@school.edu,student\n" +
+						"s005,Bob\n",
+				)
+			},
+			wantLen: 1,
+			wantErr: true,
+			errContains: "line 3: short row",
+			wantStudents: []contracts.RosterStudent{
+				{Email: "alice@school.edu", FullName: "Alice Smith", ExternalID: "s001"},
+			},
+		},
+		{
+			name: "teacher rows filtered silently (no error)",
+			readerFn: func(t *testing.T) io.Reader {
+				return strings.NewReader(
+					"sourcedId,givenName,familyName,email,role\n" +
+						"s001,Alice,Smith,alice@school.edu,student\n" +
+						"t001,Mr.,Teacher,teacher@school.edu,teacher\n" +
+						"a001,Admin,User,admin@school.edu,admin\n",
+				)
+			},
+			wantLen: 1,
+			wantErr: false,
+			wantStudents: []contracts.RosterStudent{
+				{Email: "alice@school.edu", FullName: "Alice Smith", ExternalID: "s001"},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -83,7 +131,18 @@ func TestRosterConnector_ImportRoster(t *testing.T) {
 				if tc.errContains != "" {
 					assert.Contains(t, err.Error(), tc.errContains)
 				}
-				assert.Nil(t, students)
+				// When there's an error, still check the returned students (CSV pattern: partial results + error).
+				if tc.wantLen > 0 {
+					require.Len(t, students, tc.wantLen)
+				}
+				for i, want := range tc.wantStudents {
+					if i >= len(students) {
+						break
+					}
+					assert.Equal(t, want.Email, students[i].Email)
+					assert.Equal(t, want.FullName, students[i].FullName)
+					assert.Equal(t, want.ExternalID, students[i].ExternalID)
+				}
 				return
 			}
 
